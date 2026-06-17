@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B4B3DD912F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B48FD5672F44170B004FBB1F /* Guitar Man.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Guitar Man.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeckPracticeViewsScaleStudySettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +39,7 @@
 			children = (
 				B48FD5692F44170B004FBB1F /* Guitar Man */,
 				B48FD5682F44170B004FBB1F /* Products */,
+				B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -119,6 +125,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4B3DD912F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,9 +260,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 533KRDNZ34;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar ​Man needs microphone access to detect the pitch of your guitar for the tuner";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -285,9 +293,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 533KRDNZ34;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar ​Man needs microphone access to detect the pitch of your guitar for the tuner";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
