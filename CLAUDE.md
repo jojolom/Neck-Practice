@@ -1,7 +1,7 @@
 # Guitar Man
 
 SwiftUI iOS app for guitar fretboard practice. On the device and in the app it is called **Guitar Man**.
-The App Store listing was published as **Neck Practice** (1.0); the bare name "Guitar Man" is already taken on the App Store, so the store name needs a variant (e.g. "Guitar Man: Fretboard Trainer") — check App Store Connect for the current store name before writing it anywhere user-facing (`docs/index.html` still says Neck Practice).
+The App Store name is **Guitar Man: Fretboard Trainer** (set on the 1.1 draft; 1.0 was published as "Neck Practice"). The bare name "Guitar Man" is already taken on the App Store, so the store name needs the descriptor while the home-screen name stays "Guitar Man" (`CFBundleDisplayName`).
 Source files keep their `NeckPractice*` prefix, and the Xcode project, target, and folder are named "Guitar Man" — don't rename them; it would break signing and App Store continuity.
 
 ## Layout
