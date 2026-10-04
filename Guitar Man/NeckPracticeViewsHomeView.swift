@@ -189,7 +189,7 @@ struct HomeView: View {
                 .id("referencesSection")
             }
             }
-            .navigationTitle("Neck Practice")
+            .navigationTitle("Guitar Man")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -403,7 +403,7 @@ private struct AboutView: View {
                     .shadow(radius: 4, y: 2)
 
                 VStack(spacing: 6) {
-                    Text("Neck Practice")
+                    Text("Guitar Man")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
 
                     Text("Version \(appVersion)")

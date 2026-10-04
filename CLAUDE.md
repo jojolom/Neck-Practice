@@ -1,7 +1,8 @@
-# Neck Practice (internal name: Guitar Man)
+# Guitar Man
 
-SwiftUI iOS app for guitar fretboard practice, shipped on the App Store as **Neck Practice**.
-The Xcode project, target, and folder are still named "Guitar Man" — don't rename them; it would break signing and App Store continuity.
+SwiftUI iOS app for guitar fretboard practice. On the device and in the app it is called **Guitar Man**.
+The App Store listing was published as **Neck Practice** (1.0); the bare name "Guitar Man" is already taken on the App Store, so the store name needs a variant (e.g. "Guitar Man: Fretboard Trainer") — check App Store Connect for the current store name before writing it anywhere user-facing (`docs/index.html` still says Neck Practice).
+Source files keep their `NeckPractice*` prefix, and the Xcode project, target, and folder are named "Guitar Man" — don't rename them; it would break signing and App Store continuity.
 
 ## Layout
 - `Guitar Man.xcodeproj` — app target `Guitar Man` plus three Screen Time extension targets (below). Uses Xcode 16+ **file-system synchronized groups**: any `.swift` file placed in `Guitar Man/` is compiled automatically; never hand-edit `project.pbxproj` to add files.

@@ -161,7 +161,7 @@ enum ReminderMessages {
         ("Your guitar is waiting", "Five minutes is enough to get going."),
         ("Let's get those fingers moving", "Start a new streak with today's routine."),
         ("Time to tune up your skills", "A quick session starts a new streak."),
-        ("Day one starts now 🔥", "Open Neck Practice and start your streak."),
+        ("Day one starts now 🔥", "Open Guitar Man and start your streak."),
         ("Small steps, big riffs", "Build a streak, one short session at a time."),
         ("The fretboard won't learn itself", "Give it five minutes today."),
         ("How about a quick jam?", "Start a streak with today's routine."),

@@ -19,7 +19,7 @@ nonisolated enum ScreenTimeShared {
 
     static let appGroupID = "group.test.Guitar-Man"
     /// Shown on the shield and in its notification.
-    static let appName = "Neck Practice"
+    static let appName = "Guitar Man"
     static let maxUnlocksPerDay = 2
     static let unlockMinutes = 15
 
