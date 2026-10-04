@@ -51,6 +51,12 @@ final class Looper {
     /// Index of the currently soloed layer, or nil when playing all.
     private(set) var soloIndex: Int? = nil
 
+    /// Sample rate of the loop's audio (the input format's rate), or 0 before the looper starts.
+    var sampleRate: Double { recordingFormat?.sampleRate ?? 0 }
+
+    /// How many more layers fit (the looper holds up to 8).
+    var freeLayerSlots: Int { max(0, maxLayers - layers.count) }
+
     /// Progress through the loop: 0.0 to 1.0
     var progress: Double {
         guard loopDuration > 0 else { return 0 }
@@ -266,6 +272,51 @@ final class Looper {
     func unsolo() {
         soloIndex = nil
         rebuildPreservingPosition()
+    }
+
+    /// A copy of one layer's mono samples (e.g. to save it), or nil if there's no such layer.
+    func layerSamples(at index: Int) -> [Float]? {
+        layers.indices.contains(index) ? layers[index] : nil
+    }
+
+    /// Drops saved layers into the next free banks (extras beyond the free slots are ignored).
+    /// Samples at `sampleRate` are converted to the looper's rate. When the looper is empty the
+    /// first layer sets the loop length and playback starts; otherwise every layer is padded or
+    /// trimmed to the existing loop length, like an overdub.
+    func importLayers(_ imported: [[Float]], sampleRate importedRate: Double) {
+        guard isStarted, let format = recordingFormat else { return }
+        if state == .countingIn { cancelCountIn() }
+        guard state == .empty || state == .playing || state == .stopped else { return }
+
+        let incoming = imported.prefix(freeLayerSlots).filter { !$0.isEmpty }
+        guard !incoming.isEmpty else { return }
+        let rate = format.sampleRate
+        let converted = incoming.map { LoopLibrary.resample($0, from: importedRate, to: rate) }
+
+        if layers.isEmpty {
+            let frames = min(max(converted[0].count, Int(minimumLoopDuration * rate)),
+                             Int(maximumLoopDuration * rate))
+            loopFrameCount = AVAudioFrameCount(frames)
+            loopDuration = Double(frames) / rate
+            layers = converted.map { Looper.fitted($0, to: frames) }
+            layerCount = layers.count
+            soloIndex = nil
+            scheduleLoop()
+            state = .playing
+            startProgressTimer()
+        } else {
+            let frames = Int(loopFrameCount)
+            layers.append(contentsOf: converted.map { Looper.fitted($0, to: frames) })
+            layerCount = layers.count
+            soloIndex = nil
+            rebuildPreservingPosition()
+        }
+    }
+
+    /// `samples` padded with silence or trimmed to exactly `frames` frames.
+    static func fitted(_ samples: [Float], to frames: Int) -> [Float] {
+        if samples.count >= frames { return Array(samples.prefix(frames)) }
+        return samples + [Float](repeating: 0, count: frames - samples.count)
     }
 
     /// Re-record a specific layer slot (after the count-in).

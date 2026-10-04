@@ -62,6 +62,6 @@ struct NeckPracticeApp: App {
                     UIApplication.shared.isIdleTimerDisabled = false
                 }
         }
-        .modelContainer(for: PracticeSessionLog.self)
+        .modelContainer(for: [PracticeSessionLog.self, SavedLoop.self])
     }
 }

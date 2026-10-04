@@ -5,10 +5,20 @@
 
 import SwiftUI
 
+/// Colors for the 8 layer banks, shared by the looper and the save/library sheets.
+enum LayerPalette {
+    static let colors: [Color] = [
+        .blue, .purple, .pink, .orange,
+        .cyan, .green, .yellow, .mint
+    ]
+}
+
 struct LooperView: View {
 
     @State private var looper = Looper()
     @State private var showClearConfirmation = false
+    @State private var showSaveSheet = false
+    @State private var showSavedSheet = false
     @State private var visibleLayers: Set<Int> = []
 
     var body: some View {
@@ -29,7 +39,7 @@ struct LooperView: View {
         .onChange(of: looper.layerCount) { oldCount, newCount in
             if newCount > oldCount {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.55)) {
-                    visibleLayers.insert(newCount - 1)
+                    visibleLayers.formUnion(oldCount..<newCount)
                 }
             } else if newCount < oldCount {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -41,10 +51,7 @@ struct LooperView: View {
 
     // MARK: - Layer Colors
 
-    private let layerColors: [Color] = [
-        .blue, .purple, .pink, .orange,
-        .cyan, .green, .yellow, .mint
-    ]
+    private let layerColors = LayerPalette.colors
 
     // MARK: - Main Content
 
@@ -138,6 +145,12 @@ struct LooperView: View {
                     looper.unsolo()
                 }
             }
+        }
+        .sheet(isPresented: $showSaveSheet) {
+            SaveLayersView(looper: looper)
+        }
+        .sheet(isPresented: $showSavedSheet) {
+            SavedLoopsView(looper: looper)
         }
     }
 
@@ -270,7 +283,7 @@ struct LooperView: View {
     // MARK: - Secondary Controls
 
     private var secondaryControls: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             // Stop
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -286,6 +299,36 @@ struct LooperView: View {
             }
             .buttonStyle(.plain)
             .disabled(!stopEnabled)
+
+            // Save layers to the library
+            Button {
+                showSaveSheet = true
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(canSave ? Color.blue : Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSave)
+            .accessibilityLabel("Save layers")
+
+            // Add layers from the library
+            Button {
+                showSavedSheet = true
+            } label: {
+                Image(systemName: "tray.and.arrow.up")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(canAddSaved ? Color.purple : Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAddSaved)
+            .accessibilityLabel("Add from saved")
 
             // Trash — removes soloed layer, or clears all
             Button {
@@ -319,6 +362,19 @@ struct LooperView: View {
                 Text("This will delete all recorded layers.")
             }
         }
+    }
+
+    /// Saving/adding needs a settled looper: not mid-recording or counting in.
+    private var isBusyRecording: Bool {
+        looper.state == .recording || looper.state == .overdubbing || looper.state == .countingIn
+    }
+
+    private var canSave: Bool {
+        looper.layerCount > 0 && !isBusyRecording
+    }
+
+    private var canAddSaved: Bool {
+        looper.freeLayerSlots > 0 && !isBusyRecording
     }
 
     private var stopEnabled: Bool {
