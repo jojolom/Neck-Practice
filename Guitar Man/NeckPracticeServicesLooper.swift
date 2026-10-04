@@ -5,6 +5,11 @@
 //  Audio looper that records from the microphone, plays back in a loop,
 //  and supports overdubbing multiple layers — like a guitar looper pedal.
 //
+//  Every recording (base loop, overdub, re-record) starts with a 3-2-1 count-in.
+//  Playback runs on one player-node timeline: overdubs are placed at the loop position
+//  where they started (minus device latency), and a new mix is swapped in at the next
+//  loop boundary so the loop never restarts when an overdub finishes.
+//
 
 import Accelerate
 import AVFoundation
@@ -14,10 +19,18 @@ import Observation
 
 enum LooperState {
     case empty        // Nothing recorded yet
+    case countingIn   // 3-2-1 before a recording starts (loop keeps playing if one exists)
     case recording    // Capturing the base loop
     case playing      // Loop is playing back
     case overdubbing  // Playing + recording a new layer simultaneously
     case stopped      // Loop exists but playback is paused
+}
+
+/// What a count-in leads to.
+private enum PendingRecording: Equatable {
+    case base
+    case overdub
+    case replace(Int)
 }
 
 // MARK: - Looper
@@ -33,6 +46,8 @@ final class Looper {
     private(set) var currentTime: TimeInterval = 0
     private(set) var inputLevel: Float = 0
     private(set) var permissionDenied: Bool = false
+    /// The count-in number currently showing (3, 2, 1), or nil outside a count-in.
+    private(set) var countdown: Int? = nil
     /// Index of the currently soloed layer, or nil when playing all.
     private(set) var soloIndex: Int? = nil
 
@@ -54,8 +69,11 @@ final class Looper {
     private var layers: [[Float]] = []
     /// The mixed buffer scheduled for looping playback.
     private var mixedBuffer: AVAudioPCMBuffer?
-    /// Fragments collected during the current recording / overdub.
-    private var currentRecordingFragments: [AVAudioPCMBuffer] = []
+    /// Samples collected during the current recording / overdub. Appended on the audio
+    /// thread and read on main, so always go through `recordLock`.
+    private var recordedChunks: [[Float]] = []
+    private var recordedFrameCount = 0
+    private let recordLock = NSLock()
     /// Total frames in the canonical loop (set from first recording).
     private var loopFrameCount: AVAudioFrameCount = 0
 
@@ -63,6 +81,22 @@ final class Looper {
 
     private var progressTimer: Timer?
     private var recordingStartTime: Date?
+
+    // MARK: - Count-in
+
+    private var countInTask: Task<Void, Never>?
+    private var pendingRecording: PendingRecording?
+    private var tickPlayer: AVAudioPlayer?
+    private var lastTickPlayer: AVAudioPlayer?
+
+    // MARK: - Loop position
+
+    /// Loop frame that sample 0 of the currently scheduled buffer corresponds to. The mix is
+    /// built rotated by this amount so a rebuild can resume mid-loop (the player node's
+    /// sample time restarts at 0 whenever it is stopped).
+    private var playbackOffsetFrames = 0
+    /// Loop frame at which the current overdub started capturing.
+    private var overdubStartPosition = 0
 
     // MARK: - Flags
 
@@ -126,6 +160,7 @@ final class Looper {
     }
 
     func stop() {
+        cancelCountIn()
         progressTimer?.invalidate()
         progressTimer = nil
         removeInputTap()
@@ -135,8 +170,9 @@ final class Looper {
         state = .empty
         layers.removeAll()
         mixedBuffer = nil
-        currentRecordingFragments.removeAll()
+        discardRecordedSamples()
         loopFrameCount = 0
+        playbackOffsetFrames = 0
         layerCount = 0
         loopDuration = 0
         currentTime = 0
@@ -149,11 +185,13 @@ final class Looper {
     func mainAction() {
         switch state {
         case .empty:
-            beginRecording()
+            beginCountIn(.base)
+        case .countingIn:
+            cancelCountIn()
         case .recording:
             stopRecording()
         case .playing:
-            beginOverdub()
+            beginCountIn(.overdub)
         case .overdubbing:
             stopOverdub()
         case .stopped:
@@ -162,6 +200,7 @@ final class Looper {
     }
 
     func stopPlayback() {
+        if state == .countingIn { cancelCountIn() }
         guard state == .playing || state == .overdubbing else { return }
         if state == .overdubbing {
             stopOverdub()
@@ -174,26 +213,32 @@ final class Looper {
     }
 
     func undo() {
+        cancelCountIn()
+
         // If overdubbing, cancel the current overdub first
         if state == .overdubbing {
             removeInputTap()
-            currentRecordingFragments.removeAll()
+            discardRecordedSamples()
+            replacingLayerIndex = nil
             state = .playing
         }
 
         guard layers.count > 1 else { return }
         layers.removeLast()
         layerCount = layers.count
-        rebuildAndReschedule()
+        soloIndex = nil
+        rebuildPreservingPosition()
     }
 
     func removeLayer(at index: Int) {
         guard index >= 0, index < layers.count else { return }
+        cancelCountIn()
 
         // If overdubbing, cancel the overdub first
-        if state == .overdubbing {
+        let wasOverdubbing = state == .overdubbing
+        if wasOverdubbing {
             removeInputTap()
-            currentRecordingFragments.removeAll()
+            discardRecordedSamples()
             replacingLayerIndex = nil
         }
 
@@ -204,69 +249,42 @@ final class Looper {
         if layers.isEmpty {
             clearAll()
         } else {
-            buildMixedBuffer()
-            if state == .playing || state == .overdubbing {
-                guard let buffer = mixedBuffer else { return }
-                playerNode.stop()
-                playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-                playerNode.play()
-                state = .playing
-            }
+            rebuildPreservingPosition()
+            if wasOverdubbing { state = .playing }
         }
     }
 
     /// Solo a single layer — only that layer's audio plays.
     func solo(layerAt index: Int) {
         guard index >= 0, index < layers.count else { return }
+        cancelCountIn()
         soloIndex = index
-        buildMixedBuffer()
-        if state == .playing || state == .overdubbing {
-            guard let buffer = mixedBuffer else { return }
-            playerNode.stop()
-            playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-            playerNode.play()
-        }
+        rebuildPreservingPosition()
     }
 
     /// Stop soloing — play all layers together.
     func unsolo() {
         soloIndex = nil
-        buildMixedBuffer()
-        if state == .playing || state == .overdubbing {
-            guard let buffer = mixedBuffer else { return }
-            playerNode.stop()
-            playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-            playerNode.play()
-        }
+        rebuildPreservingPosition()
     }
 
-    /// Start recording to replace a specific layer slot.
+    /// Re-record a specific layer slot (after the count-in).
     func replaceOverdub(at index: Int) {
-        guard isStarted, index >= 0, index < layers.count else { return }
-        replacingLayerIndex = index
-        soloIndex = nil
-        currentRecordingFragments.removeAll()
-        installInputTap()
-        // Rebuild with all layers so the user hears everything while re-recording
-        buildMixedBuffer()
-        if state == .playing {
-            guard let buffer = mixedBuffer else { return }
-            playerNode.stop()
-            playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-            playerNode.play()
-        }
-        state = .overdubbing
+        guard isStarted, state == .playing, index >= 0, index < layers.count else { return }
+        beginCountIn(.replace(index))
     }
 
     func clearAll() {
+        cancelCountIn()
         removeInputTap()
         playerNode.stop()
         progressTimer?.invalidate()
         progressTimer = nil
         layers.removeAll()
         mixedBuffer = nil
-        currentRecordingFragments.removeAll()
+        discardRecordedSamples()
         loopFrameCount = 0
+        playbackOffsetFrames = 0
         layerCount = 0
         loopDuration = 0
         currentTime = 0
@@ -276,11 +294,82 @@ final class Looper {
         state = .empty
     }
 
+    // MARK: - Count-in
+
+    /// Starts the 3-2-1 count-in; when it finishes, the matching recording begins.
+    /// The loop (if any) keeps playing underneath.
+    private func beginCountIn(_ kind: PendingRecording) {
+        guard isStarted else { return }
+        if kind == .overdub, layerCount >= maxLayers { return }
+
+        countInTask?.cancel()
+        pendingRecording = kind
+        countdown = 3
+        state = .countingIn
+        prepareTickPlayers()
+
+        countInTask = Task { [weak self] in
+            for n in [3, 2, 1] {
+                guard let self, !Task.isCancelled else { return }
+                self.countdown = n
+                self.playTick(isLast: n == 1)
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.finishCountIn()
+        }
+    }
+
+    /// Abort a count-in: back to the empty looper, or back to playing if a loop exists.
+    private func cancelCountIn() {
+        countInTask?.cancel()
+        countInTask = nil
+        pendingRecording = nil
+        countdown = nil
+        if state == .countingIn {
+            state = loopFrameCount > 0 ? .playing : .empty
+        }
+    }
+
+    private func finishCountIn() {
+        let kind = pendingRecording
+        countInTask = nil
+        pendingRecording = nil
+        countdown = nil
+
+        switch kind {
+        case .base:
+            beginRecording()
+        case .overdub:
+            beginOverdub()
+        case .replace(let index):
+            beginReplace(at: index)
+        case nil:
+            state = loopFrameCount > 0 ? .playing : .empty
+        }
+    }
+
+    private func prepareTickPlayers() {
+        if tickPlayer == nil {
+            tickPlayer = SynthTone.player(frequency: 880, duration: 0.07, amplitude: 0.6)
+        }
+        if lastTickPlayer == nil {
+            lastTickPlayer = SynthTone.player(frequency: 1320, duration: 0.12, amplitude: 0.6)
+        }
+    }
+
+    /// A click on each count; higher on the last so you can count in with hands on the guitar.
+    private func playTick(isLast: Bool) {
+        let player = isLast ? lastTickPlayer : tickPlayer
+        player?.currentTime = 0
+        player?.play()
+    }
+
     // MARK: - Recording
 
     private func beginRecording() {
-        guard isStarted else { return }
-        currentRecordingFragments.removeAll()
+        guard isStarted else { state = .empty; return }
+        discardRecordedSamples()
         installInputTap()
         recordingStartTime = Date()
         state = .recording
@@ -296,8 +385,7 @@ final class Looper {
             return
         }
 
-        let samples = consolidateFragments(currentRecordingFragments)
-        currentRecordingFragments.removeAll()
+        let samples = takeRecordedSamples()
 
         let sampleRate = format.sampleRate
         let duration = Double(samples.count) / sampleRate
@@ -325,7 +413,6 @@ final class Looper {
         layers.append(trimmed)
         layerCount = layers.count
 
-        buildMixedBuffer()
         scheduleLoop()
         state = .playing
     }
@@ -333,8 +420,23 @@ final class Looper {
     // MARK: - Overdubbing
 
     private func beginOverdub() {
-        guard isStarted, layerCount < maxLayers else { return }
-        currentRecordingFragments.removeAll()
+        guard isStarted, layerCount < maxLayers else { state = .playing; return }
+        replacingLayerIndex = nil
+        startCapturingOverdub()
+    }
+
+    private func beginReplace(at index: Int) {
+        guard isStarted, index >= 0, index < layers.count else { state = .playing; return }
+        replacingLayerIndex = index
+        soloIndex = nil
+        // Hear every layer while re-recording (resumes from the current position).
+        rebuildPreservingPosition()
+        startCapturingOverdub()
+    }
+
+    private func startCapturingOverdub() {
+        discardRecordedSamples()
+        overdubStartPosition = currentLoopPosition() ?? 0
         installInputTap()
         state = .overdubbing
     }
@@ -342,23 +444,24 @@ final class Looper {
     private func stopOverdub() {
         removeInputTap()
 
-        let samples = consolidateFragments(currentRecordingFragments)
-        currentRecordingFragments.removeAll()
+        let samples = takeRecordedSamples()
 
-        guard !samples.isEmpty, loopFrameCount > 0 else {
+        guard !samples.isEmpty, loopFrameCount > 0, let format = recordingFormat else {
             state = .playing
             replacingLayerIndex = nil
             return
         }
 
-        // Pad or trim to match loop length
-        let targetCount = Int(loopFrameCount)
-        let aligned: [Float]
-        if samples.count >= targetCount {
-            aligned = Array(samples.prefix(targetCount))
-        } else {
-            aligned = samples + [Float](repeating: 0, count: targetCount - samples.count)
-        }
+        // What the player heard and played along to is output-latency old, and what the mic
+        // captured is input-latency old, so shift the placement back by both.
+        let session = AVAudioSession.sharedInstance()
+        let latencyFrames = Int(((session.inputLatency + session.outputLatency) * format.sampleRate).rounded())
+
+        let aligned = Looper.alignedLayer(
+            samples: samples,
+            startFrame: overdubStartPosition - latencyFrames,
+            loopLength: Int(loopFrameCount)
+        )
 
         if let replaceIndex = replacingLayerIndex, replaceIndex < layers.count {
             // Replace existing layer
@@ -372,8 +475,25 @@ final class Looper {
         }
 
         soloIndex = nil
-        rebuildAndReschedule()
+        swapMixAtLoopBoundary()
         state = .playing
+    }
+
+    /// Places `samples` into a zeroed buffer of `loopLength` frames starting at `startFrame`
+    /// (which may be negative or past the end), wrapping around the loop. Capped at one full loop.
+    static func alignedLayer(samples: [Float], startFrame: Int, loopLength: Int) -> [Float] {
+        guard loopLength > 0 else { return [] }
+        var aligned = [Float](repeating: 0, count: loopLength)
+        let start = ((startFrame % loopLength) + loopLength) % loopLength
+        let count = min(samples.count, loopLength)
+        let firstChunk = min(count, loopLength - start)
+        if firstChunk > 0 {
+            aligned.replaceSubrange(start..<(start + firstChunk), with: samples[0..<firstChunk])
+        }
+        if count > firstChunk {
+            aligned.replaceSubrange(0..<(count - firstChunk), with: samples[firstChunk..<count])
+        }
+        return aligned
     }
 
     // MARK: - Playback
@@ -385,19 +505,45 @@ final class Looper {
         startProgressTimer()
     }
 
+    /// Plays the loop from its very beginning.
     private func scheduleLoop() {
+        playbackOffsetFrames = 0
+        buildMixedBuffer()
         guard let buffer = mixedBuffer else { return }
         playerNode.stop()
         playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
         playerNode.play()
     }
 
-    private func rebuildAndReschedule() {
+    /// Where playback currently is within the loop, in frames, or nil if not playing.
+    private func currentLoopPosition() -> Int? {
+        guard loopFrameCount > 0, playerNode.isPlaying,
+              let nodeTime = playerNode.lastRenderTime,
+              let playerTime = playerNode.playerTime(forNodeTime: nodeTime) else { return nil }
+        return (Int(playerTime.sampleTime) + playbackOffsetFrames) % Int(loopFrameCount)
+    }
+
+    /// Rebuilds the mix and swaps it in immediately, resuming from the current loop position
+    /// (used for solo / unsolo / undo / remove, which should take effect right away).
+    private func rebuildPreservingPosition() {
+        playbackOffsetFrames = currentLoopPosition() ?? 0
         buildMixedBuffer()
-        guard let buffer = mixedBuffer else { return }
+        guard playerNode.isPlaying, let buffer = mixedBuffer else { return }
         playerNode.stop()
         playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
         playerNode.play()
+    }
+
+    /// Rebuilds the mix and lets it take over at the end of the current pass through the loop,
+    /// so playback never restarts or jumps (used when an overdub finishes).
+    private func swapMixAtLoopBoundary() {
+        buildMixedBuffer()
+        guard let buffer = mixedBuffer else { return }
+        if playerNode.isPlaying {
+            playerNode.scheduleBuffer(buffer, at: nil, options: [.loops, .interruptsAtLoop])
+        } else {
+            scheduleLoop()
+        }
     }
 
     // MARK: - Mixing
@@ -425,7 +571,8 @@ final class Looper {
 
         guard let channelData = buffer.floatChannelData?[0] else { return }
 
-        // Sum layers (or just the soloed layer)
+        // Sum layers (or just the soloed layer), rotated so frame 0 of the buffer is
+        // loop frame `playbackOffsetFrames`.
         let layersToMix: [[Float]]
         if let solo = soloIndex, solo < layers.count {
             layersToMix = [layers[solo]]
@@ -433,14 +580,17 @@ final class Looper {
             layersToMix = layers
         }
 
-        for i in 0..<frameCount {
-            var sum: Float = 0
-            for layer in layersToMix {
-                if i < layer.count {
-                    sum += layer[i]
+        vDSP_vclr(channelData, 1, vDSP_Length(frameCount))
+        let offset = frameCount > 0 ? playbackOffsetFrames % frameCount : 0
+        let head = vDSP_Length(frameCount - offset)
+        for layer in layersToMix where layer.count == frameCount {
+            layer.withUnsafeBufferPointer { src in
+                guard let base = src.baseAddress else { return }
+                vDSP_vadd(channelData, 1, base + offset, 1, channelData, 1, head)
+                if offset > 0 {
+                    vDSP_vadd(channelData + Int(head), 1, base, 1, channelData + Int(head), 1, vDSP_Length(offset))
                 }
             }
-            channelData[i] = sum
         }
 
         // Peak normalize to prevent clipping
@@ -475,14 +625,15 @@ final class Looper {
     }
 
     private func handleInputBuffer(_ buffer: AVAudioPCMBuffer) {
-        // Store for recording
-        currentRecordingFragments.append(buffer)
+        guard let channelData = buffer.floatChannelData?[0] else { return }
+        let frames = Int(buffer.frameLength)
+
+        // Store for recording (copied: the engine may reuse the buffer)
+        let total = appendRecorded(Array(UnsafeBufferPointer(start: channelData, count: frames)))
 
         // Compute input level for metering
-        guard let channelData = buffer.floatChannelData?[0] else { return }
-        let frameCount = vDSP_Length(buffer.frameLength)
         var rms: Float = 0
-        vDSP_measqv(channelData, 1, &rms, frameCount)
+        vDSP_measqv(channelData, 1, &rms, vDSP_Length(frames))
         rms = sqrt(rms)
         let level = min(1.0, rms * 8)
 
@@ -492,10 +643,7 @@ final class Looper {
 
         // Auto-stop long recordings
         if state == .recording, let format = recordingFormat {
-            let totalFrames = currentRecordingFragments.reduce(0) {
-                $0 + Int($1.frameLength)
-            }
-            let duration = Double(totalFrames) / format.sampleRate
+            let duration = Double(total) / format.sampleRate
             if duration >= maximumLoopDuration {
                 DispatchQueue.main.async { [weak self] in
                     self?.stopRecording()
@@ -504,16 +652,32 @@ final class Looper {
         }
     }
 
-    // MARK: - Fragment consolidation
+    // MARK: - Recorded samples (thread-safe)
 
-    private func consolidateFragments(_ fragments: [AVAudioPCMBuffer]) -> [Float] {
-        var result: [Float] = []
-        for fragment in fragments {
-            guard let data = fragment.floatChannelData?[0] else { continue }
-            let count = Int(fragment.frameLength)
-            result.append(contentsOf: UnsafeBufferPointer(start: data, count: count))
-        }
-        return result
+    /// Appends a chunk from the audio thread; returns the total frames recorded so far.
+    private func appendRecorded(_ chunk: [Float]) -> Int {
+        recordLock.lock()
+        defer { recordLock.unlock() }
+        recordedChunks.append(chunk)
+        recordedFrameCount += chunk.count
+        return recordedFrameCount
+    }
+
+    /// Returns everything recorded so far, and clears the store.
+    private func takeRecordedSamples() -> [Float] {
+        recordLock.lock()
+        let chunks = recordedChunks
+        recordedChunks.removeAll()
+        recordedFrameCount = 0
+        recordLock.unlock()
+        return Array(chunks.joined())
+    }
+
+    private func discardRecordedSamples() {
+        recordLock.lock()
+        recordedChunks.removeAll()
+        recordedFrameCount = 0
+        recordLock.unlock()
     }
 
     // MARK: - Progress timer
@@ -532,17 +696,10 @@ final class Looper {
             if let start = recordingStartTime {
                 currentTime = min(Date().timeIntervalSince(start), maximumLoopDuration)
             }
-        } else if state == .playing || state == .overdubbing {
-            // During playback, compute position from player node
-            guard let nodeTime = playerNode.lastRenderTime,
-                  let playerTime = playerNode.playerTime(forNodeTime: nodeTime),
-                  let format = recordingFormat else { return }
-            let sampleTime = Double(playerTime.sampleTime)
-            let sampleRate = format.sampleRate
-            let totalSamples = Double(loopFrameCount)
-            guard totalSamples > 0 else { return }
-            let positionInLoop = sampleTime.truncatingRemainder(dividingBy: totalSamples)
-            currentTime = max(0, positionInLoop / sampleRate)
+        } else if state == .playing || state == .overdubbing || (state == .countingIn && loopFrameCount > 0) {
+            // During playback, compute position from the player node
+            guard let format = recordingFormat, let position = currentLoopPosition() else { return }
+            currentTime = Double(position) / format.sampleRate
         }
     }
 }

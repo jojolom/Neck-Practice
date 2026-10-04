@@ -76,6 +76,7 @@ struct LooperView: View {
                     progress: looper.progress,
                     currentTime: looper.currentTime,
                     loopDuration: looper.loopDuration,
+                    countdown: looper.countdown,
                     stateColor: stateColor,
                     isActive: looper.state != .empty
                 )
@@ -197,6 +198,7 @@ struct LooperView: View {
         }
         switch looper.state {
         case .empty: return "READY"
+        case .countingIn: return "GET READY"
         case .recording: return "RECORDING"
         case .playing: return "PLAYING"
         case .overdubbing: return "OVERDUBBING"
@@ -213,12 +215,15 @@ struct LooperView: View {
         }
         switch looper.state {
         case .empty: return .gray
+        case .countingIn: return Self.countInColor
         case .recording: return .red
         case .playing: return .green
         case .overdubbing: return .orange
         case .stopped: return .gray
         }
     }
+
+    private static let countInColor = Color(red: 0.96, green: 0.72, blue: 0.10)  // amber
 
     // MARK: - Main Button Content
 
@@ -228,6 +233,9 @@ struct LooperView: View {
         case .empty:
             Image(systemName: "circle.fill")
                 .font(.system(size: 36))
+        case .countingIn:
+            Image(systemName: "xmark")      // tap to cancel the count-in
+                .font(.system(size: 34, weight: .bold))
         case .recording:
             Image(systemName: "stop.fill")
                 .font(.system(size: 36))
@@ -250,6 +258,7 @@ struct LooperView: View {
     private var mainButtonColor: Color {
         switch looper.state {
         case .empty: return .red
+        case .countingIn: return Self.countInColor
         case .recording: return .red
         case .playing:
             return looper.soloIndex != nil ? .red : .orange
@@ -314,6 +323,7 @@ struct LooperView: View {
 
     private var stopEnabled: Bool {
         looper.state == .playing || looper.state == .overdubbing
+            || (looper.state == .countingIn && looper.loopDuration > 0)
     }
 
     private var trashColor: Color {
@@ -334,6 +344,7 @@ private struct LoopProgressRing: View {
     let progress: Double
     let currentTime: TimeInterval
     let loopDuration: TimeInterval
+    let countdown: Int?
     let stateColor: Color
     let isActive: Bool
 
@@ -358,15 +369,23 @@ private struct LoopProgressRing: View {
                     .animation(.linear(duration: 1.0 / 30.0), value: progress)
             }
 
-            // Center time display
-            VStack(spacing: 4) {
-                Text(formatTime(currentTime))
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                    .contentTransition(.numericText())
-                if loopDuration > 0 {
-                    Text("/ \(formatTime(loopDuration))")
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
+            // Center: count-in number, or the time display
+            if let countdown {
+                Text("\(countdown)")
+                    .font(.system(size: 88, weight: .heavy, design: .rounded))
+                    .foregroundStyle(stateColor)
+                    .contentTransition(.numericText(countsDown: true))
+                    .animation(.snappy, value: countdown)
+            } else {
+                VStack(spacing: 4) {
+                    Text(formatTime(currentTime))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .contentTransition(.numericText())
+                    if loopDuration > 0 {
+                        Text("/ \(formatTime(loopDuration))")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }

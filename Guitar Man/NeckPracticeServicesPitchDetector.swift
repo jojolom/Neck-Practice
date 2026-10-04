@@ -206,40 +206,8 @@ final class PitchDetector {
 
     /// Plays a short synthesized chime to confirm a string was tuned.
     private func playTuneChime() {
-        let sampleRate = 44100
-        let duration = 0.18
-        let freq = 1318.5  // E6 — bright, guitar-friendly
-        let count = Int(Double(sampleRate) * duration)
-
-        // Generate 16-bit PCM samples
-        var pcm = Data(count: count * 2)
-        pcm.withUnsafeMutableBytes { raw in
-            let buf = raw.bindMemory(to: Int16.self)
-            for i in 0..<count {
-                let t = Double(i) / Double(sampleRate)
-                let envelope = 1.0 - t / duration
-                buf[i] = Int16(sin(2.0 * .pi * freq * t) * envelope * 0.25 * Double(Int16.max))
-            }
-        }
-
-        // Build a minimal WAV in memory
-        var wav = Data()
-        let dataSize = pcm.count
-        func le<T: FixedWidthInteger>(_ v: T) { var x = v.littleEndian; wav.append(Data(bytes: &x, count: MemoryLayout<T>.size)) }
-
-        wav.append("RIFF".data(using: .ascii)!)
-        le(UInt32(36 + dataSize))
-        wav.append("WAVE".data(using: .ascii)!)
-        wav.append("fmt ".data(using: .ascii)!)
-        le(UInt32(16));   le(UInt16(1));   le(UInt16(1))            // PCM, mono
-        le(UInt32(sampleRate)); le(UInt32(sampleRate * 2))          // sample rate, byte rate
-        le(UInt16(2));   le(UInt16(16))                              // block align, bits
-        wav.append("data".data(using: .ascii)!)
-        le(UInt32(dataSize))
-        wav.append(pcm)
-
-        chimePlayer = try? AVAudioPlayer(data: wav)
-        chimePlayer?.volume = 0.6
+        // E6 — bright, guitar-friendly
+        chimePlayer = SynthTone.player(frequency: 1318.5, duration: 0.18, amplitude: 0.25, volume: 0.6)
         chimePlayer?.play()
     }
 
