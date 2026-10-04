@@ -3,8 +3,13 @@
 //  Neck Practice
 //
 //  Listens to the microphone and detects the fundamental frequency of the input
-//  signal using the YIN autocorrelation algorithm — well suited for monophonic
-//  guitar signals.  Auto-detects the nearest string in standard tuning.
+//  signal (see PitchAnalyzer: YIN plus a subharmonic check — well suited for
+//  monophonic guitar signals).  Auto-detects the nearest string in standard tuning,
+//  or measures against a string the user has locked.
+//
+//  The tap delivers buffers of whatever size iOS chooses; they're accumulated in a
+//  ring buffer and the most recent 4096 samples are analyzed every ~1024 new samples,
+//  so low strings (82 Hz ≈ 580 samples per period) always get several periods.
 //
 
 import Accelerate
@@ -55,6 +60,9 @@ final class PitchDetector {
     /// The auto-detected nearest string.
     private(set) var targetString: GuitarString = GuitarString.standard[5]
 
+    /// The string the user tapped to lock the tuner to, or nil for auto-detect.
+    private(set) var lockedString: GuitarString? = nil
+
     /// Whether the detector is actively listening.
     private(set) var isListening: Bool = false
 
@@ -75,16 +83,36 @@ final class PitchDetector {
     private let engine = AVAudioEngine()
     private let bufferSize: AVAudioFrameCount = 2048
 
-    // MARK: - Smoothing & tracking (audio-thread only)
+    // MARK: - Analysis tuning
 
+    private let analysisHop = 1024               // new samples between analyses
+    private let medianCount = 5                  // frequency estimates in the median filter
+    private let switchConfirmations = 4          // consecutive analyses before auto-switching strings
+    private let attackSkipSeconds = 0.05         // ignore the noisy pick transient
+    private let onsetMinRMS: Float = 0.01
+    private let smoothingAlpha: Double = 0.25
+    private let inTuneFramesRequired: Int = 10   // ~0.2 s at the analysis rate
+    private let noPitchHoldFrames: Int = 14      // hold display ~0.3 s after signal drops
+
+    // MARK: - Tracking state (audio-thread only)
+
+    private var ring: [Float] = []
+    private var samplesSinceAnalysis = 0
+    private var previousBufferRMS: Float = 0
+    private var attackSkipRemaining = 0
+    private var recentFrequencies: [Double] = []
+    private var currentStringId: Int? = nil      // auto-detected string, nil until a pluck is heard
+    private var candidateStringId: Int = 0
+    private var candidateCount = 0
     private var smoothedCents: Double = 0
-    private let smoothingAlpha: Double = 0.3
     private var inTuneFrameCount: Int = 0
-    private let inTuneFramesRequired: Int = 6    // ~0.2 s at typical callback rate
-    private var lastStringId: Int = 6
+    private var lastStringId: Int = -1
     private var noPitchFrameCount: Int = 0
-    private let noPitchHoldFrames: Int = 10   // hold display ~0.3 s after signal drops
     private var chimePlayer: AVAudioPlayer?
+
+    // The lock is set from the main thread and read on the audio thread.
+    private let lockStateLock = NSLock()
+    private var lockedStringId: Int? = nil
 
     // MARK: - Public methods
 
@@ -112,6 +140,8 @@ final class PitchDetector {
             print("PitchDetector: no audio input available")
             return
         }
+
+        resetTracking()
 
         let inputNode = engine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -147,6 +177,29 @@ final class PitchDetector {
 
     func resetTunedStrings() {
         tunedStrings.removeAll()
+    }
+
+    /// Locks the tuner to `string` (cents measured against it, auto-detect off), or returns
+    /// to auto-detect when `string` is nil.
+    func lockString(_ string: GuitarString?) {
+        lockStateLock.withLock { lockedStringId = string?.id }
+        lockedString = string
+        if let string { targetString = string }
+    }
+
+    private func resetTracking() {
+        ring.removeAll(keepingCapacity: true)
+        ring.reserveCapacity(PitchAnalyzer.windowSize * 2)
+        samplesSinceAnalysis = 0
+        previousBufferRMS = 0
+        attackSkipRemaining = 0
+        recentFrequencies.removeAll()
+        currentStringId = nil
+        candidateCount = 0
+        smoothedCents = 0
+        inTuneFrameCount = 0
+        lastStringId = -1
+        noPitchFrameCount = 0
     }
 
     // MARK: - Chime
@@ -197,42 +250,77 @@ final class PitchDetector {
         let frameCount = Int(buffer.frameLength)
         guard frameCount > 0 else { return }
 
-        let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
+        var bufferRMS: Float = 0
+        vDSP_rmsqv(channelData, 1, &bufferRMS, vDSP_Length(frameCount))
+        let level = min(1.0, bufferRMS * 10)
 
-        // Compute RMS for signal level display and silence gating
-        let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(frameCount))
-        let level = min(1.0, rms * 10)
+        // A sudden jump in loudness is a pick attack: skip analysis while the transient settles
+        // and drop estimates that belong to the previous note.
+        if bufferRMS > onsetMinRMS && bufferRMS > previousBufferRMS * 2 {
+            attackSkipRemaining = Int(attackSkipSeconds * sampleRate)
+            recentFrequencies.removeAll()
+        }
+        previousBufferRMS = bufferRMS
 
-        guard rms > 0.002,
-              let frequency = yinPitchDetection(samples: samples, sampleRate: sampleRate) else {
+        ring.append(contentsOf: UnsafeBufferPointer(start: channelData, count: frameCount))
+        if ring.count > PitchAnalyzer.windowSize * 2 {
+            ring.removeFirst(ring.count - PitchAnalyzer.windowSize)
+        }
+        samplesSinceAnalysis += frameCount
+
+        let skippingAttack = attackSkipRemaining > 0
+        if skippingAttack { attackSkipRemaining -= frameCount }
+
+        guard !skippingAttack,
+              samplesSinceAnalysis >= analysisHop,
+              ring.count >= PitchAnalyzer.windowSize else {
+            publishLevel(level)
+            return
+        }
+        samplesSinceAnalysis = 0
+
+        let window = Array(ring.suffix(PitchAnalyzer.windowSize))
+        var windowRMS: Float = 0
+        vDSP_rmsqv(window, 1, &windowRMS, vDSP_Length(window.count))
+
+        guard windowRMS > 0.002,
+              let rawFrequency = PitchAnalyzer.detectFrequency(in: window, sampleRate: sampleRate) else {
             // No pitch detected — hold the last reading briefly to avoid flickering
             noPitchFrameCount += 1
             inTuneFrameCount = 0
             if noPitchFrameCount >= noPitchHoldFrames {
+                // Signal is gone: the next pluck starts fresh.
+                recentFrequencies.removeAll()
+                currentStringId = nil
+                candidateCount = 0
+                lastStringId = -1
                 DispatchQueue.main.async { [weak self] in
                     self?.signalLevel = level
                     self?.detectedFrequency = nil
                     self?.centsOffset = 0
                 }
             } else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.signalLevel = level
-                }
+                publishLevel(level)
             }
             return
         }
 
         noPitchFrameCount = 0
 
-        // Auto-detect nearest string
-        let nearest = findNearestString(for: frequency)
-        let rawCents = 1200.0 * log2(frequency / nearest.frequency)
+        // Median of the last few estimates rejects the occasional outlier.
+        recentFrequencies.append(rawFrequency)
+        if recentFrequencies.count > medianCount { recentFrequencies.removeFirst() }
+        let frequency = recentFrequencies.sorted()[recentFrequencies.count / 2]
 
-        // Reset smoothing when the detected string changes
-        if nearest.id != lastStringId {
+        let (target, isLocked) = selectTargetString(for: frequency)
+        let measured = isLocked ? foldToOctave(of: target, frequency: frequency) : frequency
+        let rawCents = 1200.0 * log2(measured / target.frequency)
+
+        // Reset smoothing only when the target string actually changes
+        if target.id != lastStringId {
             smoothedCents = rawCents
             inTuneFrameCount = 0
-            lastStringId = nearest.id
+            lastStringId = target.id
         } else {
             smoothedCents = smoothingAlpha * rawCents + (1.0 - smoothingAlpha) * smoothedCents
         }
@@ -245,23 +333,64 @@ final class PitchDetector {
         }
 
         let shouldMarkTuned = inTuneFrameCount >= inTuneFramesRequired
-        let stringId = nearest.id
         let smoothed = smoothedCents
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // The user may have locked/unlocked since this analysis ran.
+            let shown = self.lockedString ?? target
             self.signalLevel = level
             self.detectedFrequency = frequency
-            self.targetString = nearest
+            self.targetString = shown
             self.centsOffset = smoothed
-            if shouldMarkTuned && !self.tunedStrings.contains(stringId) {
-                self.tunedStrings.insert(stringId)
+            if shouldMarkTuned && shown.id == target.id && !self.tunedStrings.contains(target.id) {
+                self.tunedStrings.insert(target.id)
                 self.playTuneChime()
             }
         }
     }
 
-    // MARK: - Auto-detection
+    private func publishLevel(_ level: Float) {
+        DispatchQueue.main.async { [weak self] in
+            self?.signalLevel = level
+        }
+    }
+
+    // MARK: - String selection
+
+    /// Locked string if the user picked one; otherwise the nearest string, with hysteresis:
+    /// a different string must win several analyses in a row before the target switches.
+    private func selectTargetString(for frequency: Double) -> (string: GuitarString, isLocked: Bool) {
+        if let id = lockStateLock.withLock({ lockedStringId }),
+           let locked = GuitarString.standard.first(where: { $0.id == id }) {
+            currentStringId = nil   // back to a fresh auto-detect when unlocked
+            return (locked, true)
+        }
+
+        let nearest = findNearestString(for: frequency)
+        guard let current = currentStringId else {
+            currentStringId = nearest.id
+            candidateCount = 0
+            return (nearest, false)
+        }
+
+        if nearest.id != current {
+            if nearest.id == candidateStringId {
+                candidateCount += 1
+            } else {
+                candidateStringId = nearest.id
+                candidateCount = 1
+            }
+            if candidateCount >= switchConfirmations {
+                currentStringId = nearest.id
+                candidateCount = 0
+                return (nearest, false)
+            }
+        } else {
+            candidateCount = 0
+        }
+        return (GuitarString.standard.first { $0.id == currentStringId } ?? nearest, false)
+    }
 
     private func findNearestString(for frequency: Double) -> GuitarString {
         GuitarString.standard.min(by: {
@@ -270,72 +399,9 @@ final class PitchDetector {
         }) ?? GuitarString.standard[5]
     }
 
-    // MARK: - YIN Algorithm (Accelerate-optimised)
-
-    private func yinPitchDetection(samples: [Float], sampleRate: Double) -> Double? {
-        let threshold: Float = 0.20
-        let halfLength = samples.count / 2
-        let minTau = max(2, Int(sampleRate / 600))
-        let maxTau = min(Int(sampleRate / 60), halfLength - 1)
-        guard maxTau > minTau else { return nil }
-
-        let windowSize = vDSP_Length(halfLength)
-        var diff   = [Float](repeating: 0, count: maxTau + 1)
-        var cmndf  = [Float](repeating: 0, count: maxTau + 1)
-        var temp   = [Float](repeating: 0, count: halfLength)
-        cmndf[0] = 1.0
-
-        var runningSum: Float = 0
-
-        samples.withUnsafeBufferPointer { ptr in
-            let base = ptr.baseAddress!
-
-            for tau in 1...maxTau {
-                vDSP_vsub(base + tau, 1, base, 1, &temp, 1, windowSize)
-                var sum: Float = 0
-                vDSP_svesq(temp, 1, &sum, windowSize)
-
-                diff[tau] = sum
-                runningSum += sum
-                cmndf[tau] = sum / (runningSum / Float(tau))
-            }
-        }
-
-        var bestTau = -1
-        for tau in minTau...maxTau {
-            if cmndf[tau] < threshold {
-                var localMin = tau
-                while localMin + 1 <= maxTau && cmndf[localMin + 1] < cmndf[localMin] {
-                    localMin += 1
-                }
-                bestTau = localMin
-                break
-            }
-        }
-
-        guard bestTau > 0 else { return nil }
-
-        // Parabolic interpolation for sub-sample accuracy
-        let refinedTau: Double
-        if bestTau > 1 && bestTau < maxTau {
-            let s0 = Double(cmndf[bestTau - 1])
-            let s1 = Double(cmndf[bestTau])
-            let s2 = Double(cmndf[bestTau + 1])
-            let denom = s0 - 2.0 * s1 + s2
-            if abs(denom) > 1e-10 {
-                refinedTau = Double(bestTau) + (s0 - s2) / (2.0 * denom)
-            } else {
-                refinedTau = Double(bestTau)
-            }
-        } else {
-            refinedTau = Double(bestTau)
-        }
-
-        let frequency = sampleRate / refinedTau
-
-        // Sanity check: guitar fundamental range (generous bounds)
-        guard frequency >= 60 && frequency <= 500 else { return nil }
-
-        return frequency
+    /// When locked, an octave error (e.g. 165 Hz heard while locked to E2) is folded
+    /// onto the locked string's octave so the needle still reads sensibly.
+    private func foldToOctave(of target: GuitarString, frequency: Double) -> Double {
+        frequency * pow(2.0, log2(target.frequency / frequency).rounded())
     }
 }

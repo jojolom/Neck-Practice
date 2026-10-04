@@ -68,9 +68,14 @@ struct TunerView: View {
             // String status bar
             StringStatusBar(
                 currentString: detector.targetString,
+                lockedString: detector.lockedString,
                 tunedStrings: detector.tunedStrings,
                 isActive: detector.detectedFrequency != nil,
-                isInTune: detector.isInTune
+                isInTune: detector.isInTune,
+                onTapString: { string in
+                    // Tap a string to lock the tuner to it; tap it again to return to Auto.
+                    detector.lockString(detector.lockedString == string ? nil : string)
+                }
             )
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
@@ -96,7 +101,22 @@ struct TunerView: View {
             Text(frequencyLabel)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+
+            modeLabel
         }
+    }
+
+    private var modeLabel: some View {
+        Label(
+            detector.lockedString.map { "Locked: \($0.label)" } ?? "Auto",
+            systemImage: detector.lockedString == nil ? "waveform" : "lock.fill"
+        )
+        .font(.system(size: 13, weight: .semibold, design: .rounded))
+        .foregroundStyle(detector.lockedString == nil ? Color.secondary : Color.accentColor)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(.thinMaterial, in: Capsule())
+        .padding(.top, 4)
     }
 
     // MARK: - Helpers
@@ -224,9 +244,11 @@ private struct TuningGauge: View {
 private struct StringStatusBar: View {
 
     let currentString: GuitarString
+    let lockedString: GuitarString?
     let tunedStrings: Set<Int>
     let isActive: Bool
     let isInTune: Bool
+    let onTapString: (GuitarString) -> Void
 
     var body: some View {
         VStack(spacing: 10) {
@@ -240,18 +262,27 @@ private struct StringStatusBar: View {
             HStack(spacing: 0) {
                 // Low E (6) on the left → high e (1) on the right
                 ForEach(GuitarString.standard.reversed()) { string in
-                    let isCurrent = isActive && currentString.id == string.id
+                    let isLocked = lockedString?.id == string.id
+                    let isCurrent = isLocked || (lockedString == nil && isActive && currentString.id == string.id)
                     let isTuned = tunedStrings.contains(string.id)
 
-                    stringIndicator(string: string, isCurrent: isCurrent, isTuned: isTuned)
-                        .frame(maxWidth: .infinity)
+                    Button {
+                        onTapString(string)
+                    } label: {
+                        stringIndicator(string: string, isCurrent: isCurrent, isTuned: isTuned, isLocked: isLocked)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("String \(string.id), \(string.label)")
+                    .accessibilityHint(isLocked ? "Locked. Double tap to return to auto-detect." : "Double tap to lock the tuner to this string.")
                 }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: tunedStrings)
     }
 
-    private func stringIndicator(string: GuitarString, isCurrent: Bool, isTuned: Bool) -> some View {
+    private func stringIndicator(string: GuitarString, isCurrent: Bool, isTuned: Bool, isLocked: Bool) -> some View {
         VStack(spacing: 4) {
             ZStack {
                 Circle()
@@ -281,9 +312,9 @@ private struct StringStatusBar: View {
             .scaleEffect(isCurrent && isInTune ? 1.1 : 1.0)
             .animation(.spring(duration: 0.3), value: isCurrent && isInTune)
 
-            Text("String \(string.id)")
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
+            Text(isLocked ? "Locked" : "String \(string.id)")
+                .font(.system(size: 10, weight: isLocked ? .semibold : .regular))
+                .foregroundStyle(isLocked ? Color.accentColor : Color.secondary.opacity(0.6))
         }
     }
 
