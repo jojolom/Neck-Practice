@@ -16,9 +16,11 @@ struct PracticeView: View {
     private var logs: [PracticeSessionLog]
 
     @State private var store = PracticePlansStore()
+    @State private var remindersStore = PracticeRemindersStore()
     @State private var showingEditor = false
     @State private var showingSession = false
     @State private var showingPlans = false
+    @State private var showingReminders = false
     @State private var displayedMonth: Date = Calendar.current.startOfDay(for: .now)
 
     private var activePlan: PracticePlan { store.activePlan }
@@ -54,6 +56,12 @@ struct PracticeView: View {
                         title: "Manage Plans",
                         systemImage: "list.bullet.rectangle"
                     ) { showingPlans = true }
+                    actionRow(
+                        title: remindersStore.remindersEnabled
+                            ? "Reminders · \(remindersStore.reminders.filter(\.enabled).count) scheduled"
+                            : "Reminders",
+                        systemImage: remindersStore.remindersEnabled ? "bell.badge.fill" : "bell"
+                    ) { showingReminders = true }
                 }
                 .padding(.horizontal, 20)
 
