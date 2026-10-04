@@ -4,12 +4,16 @@ SwiftUI iOS app for guitar fretboard practice, shipped on the App Store as **Nec
 The Xcode project, target, and folder are still named "Guitar Man" — don't rename them; it would break signing and App Store continuity.
 
 ## Layout
-- `Guitar Man.xcodeproj` — single app target `Guitar Man`. Uses Xcode 16+ **file-system synchronized groups**: any `.swift` file placed in `Guitar Man/` is compiled automatically; never hand-edit `project.pbxproj` to add files.
+- `Guitar Man.xcodeproj` — app target `Guitar Man` plus three Screen Time extension targets (below). Uses Xcode 16+ **file-system synchronized groups**: any `.swift` file placed in `Guitar Man/` is compiled automatically; never hand-edit `project.pbxproj` to add files.
 - `Guitar Man/` — all source, flat (no subfolders). Files are prefixed by layer instead:
   - `NeckPracticeModels*.swift` — data + session logic (`@Observable` classes, SwiftData `@Model`s)
   - `NeckPracticeServices*.swift` — audio, pitch detection, metronome, looper, notifications
   - `NeckPracticeViews*.swift` — SwiftUI screens
   Follow this naming for new files.
+- Screen Time ("Block apps until I practice") — needs the Family Controls entitlement and the App Group `group.test.Guitar-Man`:
+  - `DeviceActivityMonitor/`, `ShieldConfiguration/`, `ShieldAction/` — one extension target each (`test.Guitar-Man.<Name>`), embedded in the app. Each folder holds its Swift file, `Info.plist` (excluded from the target's sources), and `.entitlements`.
+  - `ScreenTimeShared/ScreenTimeShared.swift` — compiled into the app **and** all three extensions: App Group state, shield apply/clear, the 15-min unlock (2/day). Keep it plain, `nonisolated` code (the app target defaults to MainActor, the extensions don't). `appName` there is the name shown on the shield.
+  - App side: `NeckPracticeServicesScreenTime.swift` (`ScreenTimeBlocker`) and `NeckPracticeViewsBlockAppsView.swift`. Screen Time only works on a real device, not the Simulator.
 - `docs/index.html` — Support & Privacy Policy page, served by GitHub Pages at https://jojolom.github.io/Neck-Practice/ (the App Store listing's support/privacy URL). Keep it accurate when the app's data handling changes.
 - `NeckPracticeApp.swift` — entry point; SwiftData container for `PracticeSessionLog`, injects `AudioSettings` via `.environment`.
 

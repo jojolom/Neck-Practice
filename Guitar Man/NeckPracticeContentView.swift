@@ -18,15 +18,21 @@ struct ContentView: View {
         HomeView()
             // Keep the next 7 days of reminders in step with today's practice: at launch,
             // whenever the app becomes active or goes to the background, and when logs change.
-            .task { NotificationService.shared.refreshSchedule(logs: logs) }
+            .task { refreshPracticeState() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active || phase == .background {
-                    NotificationService.shared.refreshSchedule(logs: logs)
+                    refreshPracticeState()
                 }
             }
             .onChange(of: logs.count) {
-                NotificationService.shared.refreshSchedule(logs: logs)
+                refreshPracticeState()
             }
+    }
+
+    /// Reminders and the app-blocking shield both depend on whether you've practiced today.
+    private func refreshPracticeState() {
+        NotificationService.shared.refreshSchedule(logs: logs)
+        ScreenTimeBlocker.shared.reconcile(practicedToday: PracticeHistory.didPracticeToday(logs))
     }
 }
 

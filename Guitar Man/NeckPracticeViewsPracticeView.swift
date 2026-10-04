@@ -21,6 +21,7 @@ struct PracticeView: View {
     @State private var showingSession = false
     @State private var showingPlans = false
     @State private var showingReminders = false
+    @State private var showingBlockApps = false
     @State private var displayedMonth: Date = Calendar.current.startOfDay(for: .now)
 
     private var activePlan: PracticePlan { store.activePlan }
@@ -62,6 +63,10 @@ struct PracticeView: View {
                             : "Reminders",
                         systemImage: remindersStore.remindersEnabled ? "bell.badge.fill" : "bell"
                     ) { showingReminders = true }
+                    actionRow(
+                        title: ScreenTimeBlocker.shared.isEnabled ? "Block Apps · On" : "Block Apps Until I Practice",
+                        systemImage: ScreenTimeBlocker.shared.isEnabled ? "lock.shield.fill" : "lock.shield"
+                    ) { showingBlockApps = true }
                 }
                 .padding(.horizontal, 20)
 
@@ -83,6 +88,9 @@ struct PracticeView: View {
                 store: remindersStore,
                 suggestedTime: PracticeHistory.usualPracticeTime(from: logs)
             )
+        }
+        .sheet(isPresented: $showingBlockApps) {
+            BlockAppsView()
         }
         .fullScreenCover(isPresented: $showingSession) {
             PracticeSessionView(plan: activePlan) { result in
@@ -410,6 +418,8 @@ struct PracticeView: View {
 
         // Practiced today: cancel the rest of today's reminders and re-plan the coming days.
         NotificationService.shared.refreshSchedule(logs: logs + [log])
+        // ...and lift the app-blocking shield for the rest of the day.
+        ScreenTimeBlocker.shared.reconcile(practicedToday: true)
     }
 }
 
