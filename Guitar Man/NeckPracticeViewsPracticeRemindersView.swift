@@ -12,6 +12,8 @@ import UserNotifications
 struct PracticeRemindersView: View {
 
     @Bindable var store: PracticeRemindersStore
+    /// The time the user usually practices, from their history (nil until they have a few sessions).
+    var suggestedTime: PracticeTimeOfDay? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var authStatus: UNAuthorizationStatus = .notDetermined
@@ -62,6 +64,9 @@ struct PracticeRemindersView: View {
                     if store.reminders.isEmpty {
                         Text("No reminders yet. Add one below.")
                             .foregroundStyle(.secondary)
+                        if let suggestedTime {
+                            suggestionRow(suggestedTime)
+                        }
                     } else {
                         ForEach(store.reminders) { reminder in
                             reminderRow(reminder)
@@ -82,7 +87,7 @@ struct PracticeRemindersView: View {
                 } header: {
                     Text("Times")
                 } footer: {
-                    Text("Each enabled time will send one daily notification. Tap a time to edit. Swipe to delete.")
+                    Text("Each enabled time sends a reminder on days you haven't practiced yet, with an extra nudge at 9 PM if your streak is on the line. Tap a time to edit. Swipe to delete.")
                 }
             }
             .navigationTitle("Reminders")
@@ -100,6 +105,7 @@ struct PracticeRemindersView: View {
                 timePickerSheet
             }
             .task {
+                store.suggestedTime = suggestedTime
                 await NotificationService.shared.refreshAuthStatus()
                 authStatus = NotificationService.shared.authStatus
             }
@@ -269,8 +275,8 @@ struct PracticeRemindersView: View {
             showingIntro = true
             return
         }
-        draftHour = 19
-        draftMinute = 0
+        draftHour = suggestedTime?.hour ?? 19
+        draftMinute = suggestedTime?.minute ?? 0
         showingAddPicker = true
     }
 
@@ -287,6 +293,33 @@ struct PracticeRemindersView: View {
     }
 
     // MARK: - Rows
+
+    /// "You usually practice around 7:30 PM" — one tap to add a reminder at that time.
+    private func suggestionRow(_ time: PracticeTimeOfDay) -> some View {
+        Button {
+            if authStatus == .notDetermined {
+                showingIntro = true      // on grant, the default reminder uses this time
+            } else if authStatus != .denied {
+                store.addReminder(hour: time.hour, minute: time.minute)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("You usually practice around \(time.displayTime)")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    Text("Tap to remind you then")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(authStatus == .denied)
+    }
 
     private func reminderRow(_ reminder: PracticeReminder) -> some View {
         HStack(spacing: 12) {

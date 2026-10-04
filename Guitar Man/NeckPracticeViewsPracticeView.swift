@@ -78,6 +78,12 @@ struct PracticeView: View {
         .sheet(isPresented: $showingPlans) {
             PracticePlansListView(store: store)
         }
+        .sheet(isPresented: $showingReminders) {
+            PracticeRemindersView(
+                store: remindersStore,
+                suggestedTime: PracticeHistory.usualPracticeTime(from: logs)
+            )
+        }
         .fullScreenCover(isPresented: $showingSession) {
             PracticeSessionView(plan: activePlan) { result in
                 logSession(result: result)
@@ -401,6 +407,9 @@ struct PracticeView: View {
         )
         modelContext.insert(log)
         try? modelContext.save()
+
+        // Practiced today: cancel the rest of today's reminders and re-plan the coming days.
+        NotificationService.shared.refreshSchedule(logs: logs + [log])
     }
 }
 

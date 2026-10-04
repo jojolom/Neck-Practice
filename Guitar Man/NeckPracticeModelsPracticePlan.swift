@@ -359,6 +359,21 @@ final class PracticeSessionLog {
     }
 }
 
+/// A wall-clock time (local), e.g. a suggested reminder time.
+struct PracticeTimeOfDay: Equatable {
+    var hour: Int
+    var minute: Int
+
+    /// Formatted local time string (e.g. "7:30 PM").
+    var displayTime: String {
+        var components = DateComponents()
+        components.hour = hour
+        components.minute = minute
+        let date = Calendar.current.date(from: components) ?? .now
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+}
+
 // MARK: - Streak + history helpers
 
 enum PracticeHistory {
@@ -405,6 +420,20 @@ enum PracticeHistory {
             let date = calendar.date(byAdding: .day, value: -offset, to: startOfToday)!
             return (date, days.contains(date))
         }
+    }
+
+    /// The time of day the user usually practices: the median `completedAt` time across
+    /// their sessions, rounded to the nearest 15 minutes. Needs at least 3 sessions.
+    static func usualPracticeTime(from logs: [PracticeSessionLog]) -> PracticeTimeOfDay? {
+        guard logs.count >= 3 else { return nil }
+        let calendar = Calendar.current
+        let minutes = logs.map { log -> Int in
+            let c = calendar.dateComponents([.hour, .minute], from: log.completedAt)
+            return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        }.sorted()
+        let median = minutes[minutes.count / 2]
+        let rounded = min(23 * 60 + 45, Int((Double(median) / 15).rounded()) * 15)
+        return PracticeTimeOfDay(hour: rounded / 60, minute: rounded % 60)
     }
 
     /// Total minutes practiced per day, keyed by `startOfDay`. Multiple logs

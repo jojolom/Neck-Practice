@@ -4,7 +4,7 @@
 //
 //  Data model + observable store for the user's daily practice reminders.
 //  Persists to UserDefaults; pushes any change down to NotificationService
-//  so the OS-scheduled notifications stay in sync.
+//  (which plans the actual notifications) so the OS-scheduled ones stay in sync.
 //
 
 import Foundation
@@ -41,21 +41,29 @@ final class PracticeRemindersStore {
     var remindersEnabled: Bool {
         didSet { persist(); reschedule() }
     }
+    /// The user's usual practice time (from their history), offered when they have no reminder yet.
+    var suggestedTime: PracticeTimeOfDay?
 
     private static let listKey = "practiceReminders.v1"
     private static let enabledKey = "practiceReminders.v1.enabled"
     private static let defaultReminder = PracticeReminder(hour: 19, minute: 0)
 
     init() {
-        let loaded: [PracticeReminder] = {
+        let saved = Self.loadPersisted()
+        self.reminders = saved.reminders
+        self.remindersEnabled = saved.enabled
+    }
+
+    /// What's currently saved, independent of any store instance (NotificationService plans from this).
+    static func loadPersisted() -> (reminders: [PracticeReminder], enabled: Bool) {
+        let reminders: [PracticeReminder] = {
             guard
-                let data = UserDefaults.standard.data(forKey: Self.listKey),
+                let data = UserDefaults.standard.data(forKey: listKey),
                 let decoded = try? JSONDecoder().decode([PracticeReminder].self, from: data)
             else { return [] }
             return decoded
         }()
-        self.reminders = loaded
-        self.remindersEnabled = UserDefaults.standard.bool(forKey: Self.enabledKey)
+        return (reminders, UserDefaults.standard.bool(forKey: enabledKey))
     }
 
     // MARK: - Mutations
@@ -73,11 +81,15 @@ final class PracticeRemindersStore {
         return reminder
     }
 
-    /// Adds a default 7 PM reminder if the user has none. Used when the master
-    /// toggle is flipped on from off without any existing reminders.
+    /// Adds a reminder if the user has none — at their usual practice time if we know it,
+    /// otherwise 7 PM. Used when the master toggle is flipped on from off.
     func ensureDefaultReminder() {
         guard reminders.isEmpty else { return }
-        reminders.append(Self.defaultReminder)
+        if let time = suggestedTime {
+            reminders.append(PracticeReminder(hour: time.hour, minute: time.minute))
+        } else {
+            reminders.append(Self.defaultReminder)
+        }
         persist()
         reschedule()
     }
@@ -116,13 +128,9 @@ final class PracticeRemindersStore {
         UserDefaults.standard.set(remindersEnabled, forKey: Self.enabledKey)
     }
 
-    /// Push the current state to the OS. Cancels everything if reminders are
-    /// disabled at the master level.
+    /// Push the current state to the OS (cancels everything if reminders are
+    /// disabled at the master level).
     func reschedule() {
-        if remindersEnabled {
-            NotificationService.shared.scheduleReminders(reminders)
-        } else {
-            NotificationService.shared.cancelAll()
-        }
+        NotificationService.shared.refreshScheduleFromSnapshot()
     }
 }

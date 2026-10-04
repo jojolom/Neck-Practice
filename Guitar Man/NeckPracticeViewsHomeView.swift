@@ -64,8 +64,16 @@ extension ExerciseItem {
 
 // MARK: - HomeView
 
+/// Screens HomeView can be sent to from outside (notification taps).
+private enum HomeRoute: Hashable {
+    case dailyPractice
+}
+
 struct HomeView: View {
 
+    private let router = DeepLinkRouter.shared
+
+    @State private var path: [HomeRoute] = []
     @State private var showAbout = false
     @State private var showTools = true
     @State private var showReferences = true
@@ -74,12 +82,10 @@ struct HomeView: View {
                             GridItem(.flexible(), spacing: 16)]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollViewReader { proxy in
             ScrollView {
-                NavigationLink {
-                    PracticeView()
-                } label: {
+                NavigationLink(value: HomeRoute.dailyPractice) {
                     PracticeBanner()
                 }
                 .buttonStyle(.plain)
@@ -195,6 +201,18 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showAbout) {
                 AboutView()
+            }
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case .dailyPractice: PracticeView()
+                }
+            }
+            // A reminder was tapped (or its Start Now action): jump to Daily Practice.
+            .onChange(of: router.pendingDailyPractice, initial: true) { _, pending in
+                guard pending else { return }
+                router.pendingDailyPractice = false
+                showAbout = false
+                path = [.dailyPractice]
             }
         }
     }
