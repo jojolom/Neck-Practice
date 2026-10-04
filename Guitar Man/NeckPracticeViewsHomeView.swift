@@ -74,6 +74,7 @@ struct HomeView: View {
     private let router = DeepLinkRouter.shared
 
     @State private var path: [HomeRoute] = []
+    @State private var whatsNew: ChangelogEntry?
     @State private var showAbout = false
     @State private var showTools = true
     @State private var showReferences = true
@@ -201,6 +202,20 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showAbout) {
                 AboutView()
+            }
+            // After an update, show what changed — once.
+            .sheet(item: $whatsNew) { entry in
+                WhatsNewView(entry: entry) {
+                    whatsNew = nil
+                }
+                .onDisappear { WhatsNewTracker.markSeen() }
+            }
+            .task {
+                if let entry = WhatsNewTracker.entryToPresent() {
+                    whatsNew = entry
+                } else {
+                    WhatsNewTracker.markSeen()
+                }
             }
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
@@ -416,6 +431,25 @@ private struct AboutView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+
+                NavigationLink {
+                    VersionHistoryView()
+                } label: {
+                    HStack {
+                        Label("Version History", systemImage: "clock.arrow.circlepath")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 32)
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
 

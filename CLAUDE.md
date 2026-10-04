@@ -28,6 +28,7 @@ xcodebuild -project "Guitar Man.xcodeproj" -scheme "Guitar Man" -destination 'ge
 Requires `xcode-select` to point at Xcode.app (not CommandLineTools).
 
 ## Release
+- Add an entry at the top of `Changelog.entries` (`NeckPracticeModelsChangelog.swift`) for each new version — it drives the post-update "What's New" sheet and About ▸ Version History.
 - Bump `MARKETING_VERSION` (user-facing version) in the target's build settings for each new App Store version; the build number is set automatically by the upload script.
 - Upload to TestFlight with `scripts/upload-testflight.sh` (archives, signs via App Store Connect API key, uploads; build number = timestamp). API key config lives outside the repo in `~/.appstoreconnect/` — never copy it into the project or print it.
 - Uploading, submitting for App Review, and releasing are outward-facing: confirm with Joe before each one.
