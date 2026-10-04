@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
+
+# Build output
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Legacy nested repo (support page now lives in docs/)
+neck-practice-support/

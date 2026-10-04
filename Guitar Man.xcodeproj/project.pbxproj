@@ -7,12 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B4B3DD912F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B48FD5672F44170B004FBB1F /* Guitar Man.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Guitar Man.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeckPracticeViewsScaleStudySettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -39,7 +37,6 @@
 			children = (
 				B48FD5692F44170B004FBB1F /* Guitar Man */,
 				B48FD5682F44170B004FBB1F /* Products */,
-				B4B3DD902F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -125,7 +122,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B4B3DD912F87EAA400AC26B5 /* NeckPracticeViewsScaleStudySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
