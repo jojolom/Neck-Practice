@@ -7,18 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E87EA69ECDC9D4854AE5AFB4 /* DeviceActivityMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2D307D5B1CE964C038026C3B /* ShieldConfiguration.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1287297C0BA3D8441FC5DF7 /* ShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 210EB0B79581857EBA3DA2E6 /* ShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E87EA69ECDC9D4854AE5AFB4 /* DeviceActivityMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		BD573F710F11C068D9AFDC29 /* PBXContainerItemProxy */ = {
+		57F2C7AD3664433CC44B65AC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B48FD55F2F44170B004FBB1F /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 4BA9A32B4B73A4C1DB9752FD;
-			remoteInfo = DeviceActivityMonitor;
+			remoteGlobalIDString = 2AE97B4F4711CECD9FD0AAE6;
+			remoteInfo = ShieldAction;
 		};
 		8BF5B05BB732D837CEE5585F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,12 +27,12 @@
 			remoteGlobalIDString = 9CCD15FE50D464C3EBC49202;
 			remoteInfo = ShieldConfiguration;
 		};
-		57F2C7AD3664433CC44B65AC /* PBXContainerItemProxy */ = {
+		BD573F710F11C068D9AFDC29 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B48FD55F2F44170B004FBB1F /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 2AE97B4F4711CECD9FD0AAE6;
-			remoteInfo = ShieldAction;
+			remoteGlobalIDString = 4BA9A32B4B73A4C1DB9752FD;
+			remoteInfo = DeviceActivityMonitor;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -53,19 +53,19 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		B48FD5672F44170B004FBB1F /* Guitar Man.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Guitar Man.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeviceActivityMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShieldConfiguration.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		210EB0B79581857EBA3DA2E6 /* ShieldAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShieldConfiguration.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B48FD5672F44170B004FBB1F /* Guitar Man.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Guitar Man.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D12C8335C546D60E061E1FE7 /* Exceptions for "DeviceActivityMonitor" folder in "DeviceActivityMonitor" target */ = {
+		258423AFEA87E93E427B3FA1 /* Exceptions for "ShieldAction" folder in "ShieldAction" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */;
+			target = 2AE97B4F4711CECD9FD0AAE6 /* ShieldAction */;
 		};
 		4B1D4E9A44405921D650D90D /* Exceptions for "ShieldConfiguration" folder in "ShieldConfiguration" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -74,37 +74,16 @@
 			);
 			target = 9CCD15FE50D464C3EBC49202 /* ShieldConfiguration */;
 		};
-		258423AFEA87E93E427B3FA1 /* Exceptions for "ShieldAction" folder in "ShieldAction" target */ = {
+		D12C8335C546D60E061E1FE7 /* Exceptions for "DeviceActivityMonitor" folder in "DeviceActivityMonitor" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 2AE97B4F4711CECD9FD0AAE6 /* ShieldAction */;
+			target = 4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B48FD5692F44170B004FBB1F /* Guitar Man */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Guitar Man";
-			sourceTree = "<group>";
-		};
-		6F4AAB14E75CB1AFE1366752 /* DeviceActivityMonitor */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				D12C8335C546D60E061E1FE7 /* Exceptions for "DeviceActivityMonitor" folder in "DeviceActivityMonitor" target */,
-			);
-			path = DeviceActivityMonitor;
-			sourceTree = "<group>";
-		};
-		58759886804980474BFCF634 /* ShieldConfiguration */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				4B1D4E9A44405921D650D90D /* Exceptions for "ShieldConfiguration" folder in "ShieldConfiguration" target */,
-			);
-			path = ShieldConfiguration;
-			sourceTree = "<group>";
-		};
 		2CEE9DB52493DE27FD8D47E6 /* ShieldAction */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -118,10 +97,38 @@
 			path = ScreenTimeShared;
 			sourceTree = "<group>";
 		};
+		58759886804980474BFCF634 /* ShieldConfiguration */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4B1D4E9A44405921D650D90D /* Exceptions for "ShieldConfiguration" folder in "ShieldConfiguration" target */,
+			);
+			path = ShieldConfiguration;
+			sourceTree = "<group>";
+		};
+		6F4AAB14E75CB1AFE1366752 /* DeviceActivityMonitor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D12C8335C546D60E061E1FE7 /* Exceptions for "DeviceActivityMonitor" folder in "DeviceActivityMonitor" target */,
+			);
+			path = DeviceActivityMonitor;
+			sourceTree = "<group>";
+		};
+		B48FD5692F44170B004FBB1F /* Guitar Man */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Guitar Man";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B48FD5642F44170B004FBB1F /* Frameworks */ = {
+		282E4A965ABEA5D5189F7F40 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9925E4189309B68ADE11E263 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -135,14 +142,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		282E4A965ABEA5D5189F7F40 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9925E4189309B68ADE11E263 /* Frameworks */ = {
+		B48FD5642F44170B004FBB1F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -178,79 +178,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B48FD5662F44170B004FBB1F /* Guitar Man */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B48FD5722F44170C004FBB1F /* Build configuration list for PBXNativeTarget "Guitar Man" */;
-			buildPhases = (
-				B48FD5632F44170B004FBB1F /* Sources */,
-				B48FD5642F44170B004FBB1F /* Frameworks */,
-				B48FD5652F44170B004FBB1F /* Resources */,
-				462DA05DE8E531B27EC13E40 /* Embed Foundation Extensions */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				31E561C369FFE1F12D47D500 /* PBXTargetDependency */,
-				201C0DC8211F8CF4CED621C4 /* PBXTargetDependency */,
-				BBE4CDCDC16FF04AE1E0A567 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				B48FD5692F44170B004FBB1F /* Guitar Man */,
-				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
-			);
-			name = "Guitar Man";
-			packageProductDependencies = (
-			);
-			productName = "Guitar Man";
-			productReference = B48FD5672F44170B004FBB1F /* Guitar Man.app */;
-			productType = "com.apple.product-type.application";
-		};
-		4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = A385D2F18048F13CBD8E9C82 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitor" */;
-			buildPhases = (
-				69A0707421287765969B0462 /* Sources */,
-				AB879B4BF12A5FC4F9B8CF6D /* Frameworks */,
-				7B42B717D8146C4C4E023D1D /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				6F4AAB14E75CB1AFE1366752 /* DeviceActivityMonitor */,
-				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
-			);
-			name = DeviceActivityMonitor;
-			packageProductDependencies = (
-			);
-			productName = DeviceActivityMonitor;
-			productReference = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
-		9CCD15FE50D464C3EBC49202 /* ShieldConfiguration */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 6B7360BC6139836C0DCE979D /* Build configuration list for PBXNativeTarget "ShieldConfiguration" */;
-			buildPhases = (
-				2D5A1F16543E86C52100BB15 /* Sources */,
-				282E4A965ABEA5D5189F7F40 /* Frameworks */,
-				49EC08BEF6542C413E80D387 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				58759886804980474BFCF634 /* ShieldConfiguration */,
-				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
-			);
-			name = ShieldConfiguration;
-			packageProductDependencies = (
-			);
-			productName = ShieldConfiguration;
-			productReference = A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 		2AE97B4F4711CECD9FD0AAE6 /* ShieldAction */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E3CFD508D5D088C7D3CD7C45 /* Build configuration list for PBXNativeTarget "ShieldAction" */;
@@ -274,6 +201,79 @@
 			productReference = 210EB0B79581857EBA3DA2E6 /* ShieldAction.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A385D2F18048F13CBD8E9C82 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitor" */;
+			buildPhases = (
+				69A0707421287765969B0462 /* Sources */,
+				AB879B4BF12A5FC4F9B8CF6D /* Frameworks */,
+				7B42B717D8146C4C4E023D1D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
+				6F4AAB14E75CB1AFE1366752 /* DeviceActivityMonitor */,
+			);
+			name = DeviceActivityMonitor;
+			packageProductDependencies = (
+			);
+			productName = DeviceActivityMonitor;
+			productReference = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		9CCD15FE50D464C3EBC49202 /* ShieldConfiguration */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6B7360BC6139836C0DCE979D /* Build configuration list for PBXNativeTarget "ShieldConfiguration" */;
+			buildPhases = (
+				2D5A1F16543E86C52100BB15 /* Sources */,
+				282E4A965ABEA5D5189F7F40 /* Frameworks */,
+				49EC08BEF6542C413E80D387 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
+				58759886804980474BFCF634 /* ShieldConfiguration */,
+			);
+			name = ShieldConfiguration;
+			packageProductDependencies = (
+			);
+			productName = ShieldConfiguration;
+			productReference = A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		B48FD5662F44170B004FBB1F /* Guitar Man */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B48FD5722F44170C004FBB1F /* Build configuration list for PBXNativeTarget "Guitar Man" */;
+			buildPhases = (
+				B48FD5632F44170B004FBB1F /* Sources */,
+				B48FD5642F44170B004FBB1F /* Frameworks */,
+				B48FD5652F44170B004FBB1F /* Resources */,
+				462DA05DE8E531B27EC13E40 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				31E561C369FFE1F12D47D500 /* PBXTargetDependency */,
+				201C0DC8211F8CF4CED621C4 /* PBXTargetDependency */,
+				BBE4CDCDC16FF04AE1E0A567 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2FE80397C5340DE0A52C465C /* ScreenTimeShared */,
+				B48FD5692F44170B004FBB1F /* Guitar Man */,
+			);
+			name = "Guitar Man";
+			packageProductDependencies = (
+			);
+			productName = "Guitar Man";
+			productReference = B48FD5672F44170B004FBB1F /* Guitar Man.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -284,7 +284,7 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
-					B48FD5662F44170B004FBB1F = {
+					2AE97B4F4711CECD9FD0AAE6 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 					4BA9A32B4B73A4C1DB9752FD = {
@@ -293,7 +293,7 @@
 					9CCD15FE50D464C3EBC49202 = {
 						CreatedOnToolsVersion = 26.2;
 					};
-					2AE97B4F4711CECD9FD0AAE6 = {
+					B48FD5662F44170B004FBB1F = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -321,7 +321,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		B48FD5652F44170B004FBB1F /* Resources */ = {
+		49EC08BEF6542C413E80D387 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -335,14 +335,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		49EC08BEF6542C413E80D387 /* Resources */ = {
+		AD1274407A915D7FAB1C3965 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		AD1274407A915D7FAB1C3965 /* Resources */ = {
+		B48FD5652F44170B004FBB1F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -352,7 +352,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		B48FD5632F44170B004FBB1F /* Sources */ = {
+		2D5A1F16543E86C52100BB15 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -366,14 +366,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2D5A1F16543E86C52100BB15 /* Sources */ = {
+		87D372F623DFBDB99D1A361C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		87D372F623DFBDB99D1A361C /* Sources */ = {
+		B48FD5632F44170B004FBB1F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -383,15 +383,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		31E561C369FFE1F12D47D500 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */;
-			targetProxy = BD573F710F11C068D9AFDC29 /* PBXContainerItemProxy */;
-		};
 		201C0DC8211F8CF4CED621C4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9CCD15FE50D464C3EBC49202 /* ShieldConfiguration */;
 			targetProxy = 8BF5B05BB732D837CEE5585F /* PBXContainerItemProxy */;
+		};
+		31E561C369FFE1F12D47D500 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4BA9A32B4B73A4C1DB9752FD /* DeviceActivityMonitor */;
+			targetProxy = BD573F710F11C068D9AFDC29 /* PBXContainerItemProxy */;
 		};
 		BBE4CDCDC16FF04AE1E0A567 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -401,6 +401,110 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		246223C0EC2CD6B0005DDDF2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShieldConfiguration/ShieldConfiguration.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShieldConfiguration/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShieldConfiguration;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldConfiguration";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		820AF21CD027D57DC31E7512 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShieldAction/ShieldAction.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShieldAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShieldAction;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		849D58339BC3BB7C6FD31E05 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DeviceActivityMonitor/DeviceActivityMonitor.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DeviceActivityMonitor/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitor;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.DeviceActivityMonitor";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		969D2B87D1AD8C618E897C84 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ShieldConfiguration/ShieldConfiguration.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V2RWATZXA2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShieldConfiguration/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ShieldConfiguration;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldConfiguration";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		B48FD5702F44170C004FBB1F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -525,9 +629,9 @@
 		B48FD5732F44170C004FBB1F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "Guitar Man/Guitar Man.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Guitar Man/Guitar Man.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V2RWATZXA2;
@@ -559,9 +663,9 @@
 		B48FD5742F44170C004FBB1F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "Guitar Man/Guitar Man.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Guitar Man/Guitar Man.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V2RWATZXA2;
@@ -616,110 +720,6 @@
 			};
 			name = Debug;
 		};
-		849D58339BC3BB7C6FD31E05 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = DeviceActivityMonitor/DeviceActivityMonitor.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V2RWATZXA2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = DeviceActivityMonitor/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = DeviceActivityMonitor;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.DeviceActivityMonitor";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		969D2B87D1AD8C618E897C84 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = ShieldConfiguration/ShieldConfiguration.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V2RWATZXA2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ShieldConfiguration/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = ShieldConfiguration;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldConfiguration";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		246223C0EC2CD6B0005DDDF2 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = ShieldConfiguration/ShieldConfiguration.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V2RWATZXA2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ShieldConfiguration/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = ShieldConfiguration;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldConfiguration";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		820AF21CD027D57DC31E7512 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = ShieldAction/ShieldAction.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V2RWATZXA2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ShieldAction/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = ShieldAction;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "test.Guitar-Man.ShieldAction";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
 		E65DFB969D35CB2D8AC0E2C9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -749,6 +749,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6B7360BC6139836C0DCE979D /* Build configuration list for PBXNativeTarget "ShieldConfiguration" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				969D2B87D1AD8C618E897C84 /* Debug */,
+				246223C0EC2CD6B0005DDDF2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A385D2F18048F13CBD8E9C82 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D104B0441EB2CEA2FBABCAA8 /* Debug */,
+				849D58339BC3BB7C6FD31E05 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B48FD5622F44170B004FBB1F /* Build configuration list for PBXProject "Guitar Man" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -763,24 +781,6 @@
 			buildConfigurations = (
 				B48FD5732F44170C004FBB1F /* Debug */,
 				B48FD5742F44170C004FBB1F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A385D2F18048F13CBD8E9C82 /* Build configuration list for PBXNativeTarget "DeviceActivityMonitor" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D104B0441EB2CEA2FBABCAA8 /* Debug */,
-				849D58339BC3BB7C6FD31E05 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		6B7360BC6139836C0DCE979D /* Build configuration list for PBXNativeTarget "ShieldConfiguration" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				969D2B87D1AD8C618E897C84 /* Debug */,
-				246223C0EC2CD6B0005DDDF2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
