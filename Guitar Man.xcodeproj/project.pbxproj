@@ -259,7 +259,7 @@
 				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar ​Man needs microphone access to detect the pitch of your guitar for the tuner";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Neck Practice uses the microphone for the tuner and to record loops.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -292,7 +292,7 @@
 				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar ​Man needs microphone access to detect the pitch of your guitar for the tuner";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Neck Practice uses the microphone for the tuner and to record loops.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
