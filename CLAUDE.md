@@ -23,8 +23,9 @@ xcodebuild -project "Guitar Man.xcodeproj" -scheme "Guitar Man" -destination 'ge
 Requires `xcode-select` to point at Xcode.app (not CommandLineTools).
 
 ## Release
-- Bump `MARKETING_VERSION` (user-facing) and `CURRENT_PROJECT_VERSION` (build number) in the target's build settings before each App Store upload.
-- Archive/upload is done from Xcode (Product → Archive).
+- Bump `MARKETING_VERSION` (user-facing version) in the target's build settings for each new App Store version; the build number is set automatically by the upload script.
+- Upload to TestFlight with `scripts/upload-testflight.sh` (archives, signs via App Store Connect API key, uploads; build number = timestamp). API key config lives outside the repo in `~/.appstoreconnect/` — never copy it into the project or print it.
+- Uploading, submitting for App Review, and releasing are outward-facing: confirm with Joe before each one.
 - Do not change `PRODUCT_BUNDLE_IDENTIFIER` or `DEVELOPMENT_TEAM` — the live App Store listing depends on them.
 
 ## Conventions
