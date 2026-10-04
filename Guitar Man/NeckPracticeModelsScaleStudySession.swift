@@ -3,6 +3,8 @@
 //  Neck Practice
 //
 //  Manages the 4-scale study cycle: start → relative → parallel → relative.
+//  Strings follow a 6-5-5-6 or 5-6-6-5 pattern (X, Y, Y, X): the relative moves to
+//  the opposite string, the parallel stays on the same string as the scale before it.
 //  Integrates rhythm assignment, BPM selection, and theory quizzing.
 //
 
@@ -77,32 +79,20 @@ struct ScaleEntry: Identifiable {
     let isMajor: Bool
     /// How this scale relates to the previous one in the cycle.
     let relationship: String  // "Starting Scale", "Relative Minor", etc.
-    /// When true, show the alternate string (used for parallel scales so you swap 5th↔6th).
-    var useAlternateString: Bool = false
+    /// Which string to play this scale on: 5 (A string) or 6 (low E).
+    let string: Int
 
     var qualityLabel: String { isMajor ? "Major" : "Minor" }
     var fullLabel: String { "\(root.description) \(qualityLabel)" }
 
-    /// Which string the default (non-alternate) position would use.
-    private var defaultUses6th: Bool {
-        let fret6 = fretOnLowE(for: root)
-        let fret5 = fretOnAString(for: root)
-        if fret6 == 0 { return true }
-        if fret5 == 0 { return false }
-        return fret6 <= fret5
-    }
-
-    /// Fret info for where to start on the 5th or 6th string.
+    /// Fret info for where to start on the assigned string.
     var rootFretInfo: String {
-        let fret6 = fretOnLowE(for: root)
-        let fret5 = fretOnAString(for: root)
-
-        let use6th = useAlternateString ? !defaultUses6th : defaultUses6th
-
-        if use6th {
-            return fret6 == 0 ? "6th string · open" : "6th string · fret \(fret6)"
+        if string == 6 {
+            let fret = fretOnLowE(for: root)
+            return fret == 0 ? "6th string · open" : "6th string · fret \(fret)"
         } else {
-            return fret5 == 0 ? "5th string · open" : "5th string · fret \(fret5)"
+            let fret = fretOnAString(for: root)
+            return fret == 0 ? "5th string · open" : "5th string · fret \(fret)"
         }
     }
 }
@@ -217,10 +207,14 @@ final class ScaleStudySession {
         let startRoot = Note.allCases.randomElement()!
         let startMajor = Bool.random()
 
+        // String pattern X, Y, Y, X (6556 or 5665); X is random each round.
+        let x = Bool.random() ? 6 : 5
+        let y = x == 6 ? 5 : 6
+
         var entries: [ScaleEntry] = []
 
         // Scale 1: Starting scale
-        entries.append(ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale"))
+        entries.append(ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale", string: x))
 
         // Scale 2: Relative of #1
         let prev1 = entries[0]
@@ -236,12 +230,12 @@ final class ScaleStudySession {
             rel1Major = true
             rel1Label = "Relative Major"
         }
-        entries.append(ScaleEntry(root: rel1Root, isMajor: rel1Major, relationship: rel1Label))
+        entries.append(ScaleEntry(root: rel1Root, isMajor: rel1Major, relationship: rel1Label, string: y))
 
-        // Scale 3: Parallel of #2 — swap to the other string (5th↔6th)
+        // Scale 3: Parallel of #2 — stays on the same string as #2
         let prev2 = entries[1]
         let par2Label = prev2.isMajor ? "Parallel Minor" : "Parallel Major"
-        entries.append(ScaleEntry(root: prev2.root, isMajor: !prev2.isMajor, relationship: par2Label, useAlternateString: true))
+        entries.append(ScaleEntry(root: prev2.root, isMajor: !prev2.isMajor, relationship: par2Label, string: y))
 
         // Scale 4: Relative of #3
         let prev3 = entries[2]
@@ -257,7 +251,16 @@ final class ScaleStudySession {
             rel3Major = true
             rel3Label = "Relative Major"
         }
-        entries.append(ScaleEntry(root: rel3Root, isMajor: rel3Major, relationship: rel3Label))
+        entries.append(ScaleEntry(root: rel3Root, isMajor: rel3Major, relationship: rel3Label, string: x))
+
+        #if DEBUG
+        assert(entries.map(\.string) == [x, y, y, x], "String pattern must be X, Y, Y, X")
+        for string in [5, 6] {
+            let onString = entries.filter { $0.string == string }
+            assert(onString.count == 2 && onString.filter(\.isMajor).count == 1,
+                   "Each string needs exactly one major and one minor scale")
+        }
+        #endif
 
         round = entries
     }
