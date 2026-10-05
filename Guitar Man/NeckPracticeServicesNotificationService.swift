@@ -79,7 +79,7 @@ final class NotificationService {
 
     // MARK: - Scheduling
 
-    /// Recomputes the next 7 days of reminders from the user's reminder times and practice
+    /// Recomputes the upcoming reminders from the user's reminder times and practice
     /// history (see `ReminderPlanner`): skips today if you already practiced, mentions the
     /// streak when it's on the line, and adds a 9 PM streak saver. Replaces everything pending.
     ///

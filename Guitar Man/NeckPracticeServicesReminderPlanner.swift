@@ -2,7 +2,8 @@
 //  ReminderPlanner.swift
 //  Neck Practice
 //
-//  Decides which local notifications to schedule for the next few days. Pure (Foundation
+//  Decides which local notifications to schedule, as many days ahead as iOS's limit on pending
+//  notifications allows (about two months with one reminder time). Pure (Foundation
 //  only) so it can be tested offline — NotificationService turns the plan into
 //  UNNotificationRequests.
 //
@@ -43,7 +44,6 @@ enum ReminderPlanner {
     static let streakSaverHour = 21
     /// iOS keeps at most 64 pending local notifications; stay under that.
     static let maxPending = 60
-    static let daysAhead = 7
 
     static func plan(
         reminders: [PracticeReminder],
@@ -58,14 +58,17 @@ enum ReminderPlanner {
         guard !times.isEmpty else { return [] }
 
         let today = calendar.startOfDay(for: now)
-        // Leave room for a streak saver alongside the regular reminders.
-        let days = max(1, min(daysAhead, maxPending / (times.count + 1)))
+        // One notification per time per day, plus one slot for the streak saver. Use the whole
+        // budget so reminders keep coming even if the app isn't opened for weeks; every launch
+        // and backgrounding re-plans from today.
+        let days = max(1, (maxPending - 1) / times.count)
         let atRiskDay: Int? = streak > 0 ? (practicedToday ? 1 : 0) : nil
 
         var planned: [PlannedNotification] = []
 
-        for dayOffset in 0..<days {
-            if dayOffset == 0 && practicedToday { continue }
+        // No reminders today once you've practiced, so start the run tomorrow.
+        let firstDay = practicedToday ? 1 : 0
+        for dayOffset in firstDay..<(firstDay + days) {
             guard let day = calendar.date(byAdding: .day, value: dayOffset, to: today) else { continue }
 
             let dayStreak = dayOffset == atRiskDay ? streak : 0

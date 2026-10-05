@@ -16,7 +16,7 @@ struct ContentView: View {
 
     var body: some View {
         HomeView()
-            // Keep the next 7 days of reminders in step with today's practice: at launch,
+            // Keep upcoming reminders in step with today's practice: at launch,
             // whenever the app becomes active or goes to the background, and when logs change.
             .task { refreshPracticeState() }
             .onChange(of: scenePhase) { _, phase in
