@@ -80,6 +80,8 @@ final class Looper {
     /// thread and read on main, so always go through `recordLock`.
     private var recordedChunks: [[Float]] = []
     private var recordedFrameCount = 0
+    /// Most frames the current take keeps (an overdub only uses one pass around the loop).
+    private var recordedFrameLimit = Int.max
     private let recordLock = NSLock()
     /// Total frames in the canonical loop (set from first recording).
     private var loopFrameCount: AVAudioFrameCount = 0
@@ -507,7 +509,11 @@ final class Looper {
     }
 
     private func startCapturingOverdub() {
-        discardRecordedSamples()
+        // Only the first pass around the loop is used (see alignedLayer), so an overdub left
+        // running doesn't keep filling memory (~11 MB a minute).
+        let inputRate = engine.inputNode.outputFormat(forBus: 0).sampleRate
+        let loopRate = recordingFormat?.sampleRate ?? inputRate
+        discardRecordedSamples(keepingAtMost: Int((Double(loopFrameCount) * inputRate / loopRate).rounded(.up)))
         overdubStartPosition = currentLoopPosition() ?? 0
         installInputTap()
         state = .overdubbing
@@ -766,12 +772,17 @@ final class Looper {
 
     // MARK: - Recorded samples (thread-safe)
 
-    /// Appends a chunk from the audio thread; returns the total frames recorded so far.
+    /// Appends a chunk from the audio thread (up to the take's limit); returns the total frames
+    /// recorded so far.
     private func appendRecorded(_ chunk: [Float]) -> Int {
         recordLock.lock()
         defer { recordLock.unlock() }
-        recordedChunks.append(chunk)
-        recordedFrameCount += chunk.count
+        let room = recordedFrameLimit - recordedFrameCount
+        if room > 0 {
+            let kept = chunk.count <= room ? chunk : Array(chunk.prefix(room))
+            recordedChunks.append(kept)
+            recordedFrameCount += kept.count
+        }
         return recordedFrameCount
     }
 
@@ -791,10 +802,12 @@ final class Looper {
         LoopLibrary.resample(takeRecordedSamples(), from: tapSampleRate, to: rate)
     }
 
-    private func discardRecordedSamples() {
+    /// Clears the store; the next take keeps at most `limit` frames.
+    private func discardRecordedSamples(keepingAtMost limit: Int = .max) {
         recordLock.lock()
         recordedChunks.removeAll()
         recordedFrameCount = 0
+        recordedFrameLimit = limit
         recordLock.unlock()
     }
 
