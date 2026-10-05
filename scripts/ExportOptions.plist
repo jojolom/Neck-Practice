@@ -9,7 +9,20 @@
 	<key>teamID</key>
 	<string>V2RWATZXA2</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>test.Guitar-Man</key>
+		<string>Guitar Man App Store</string>
+		<key>test.Guitar-Man.DeviceActivityMonitor</key>
+		<string>Guitar Man DeviceActivityMonitor App Store</string>
+		<key>test.Guitar-Man.ShieldAction</key>
+		<string>Guitar Man ShieldAction App Store</string>
+		<key>test.Guitar-Man.ShieldConfiguration</key>
+		<string>Guitar Man ShieldConfiguration App Store</string>
+	</dict>
 	<key>manageAppVersionAndBuildNumber</key>
 	<false/>
 </dict>

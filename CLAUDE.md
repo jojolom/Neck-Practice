@@ -31,6 +31,7 @@ Requires `xcode-select` to point at Xcode.app (not CommandLineTools).
 - Add an entry at the top of `Changelog.entries` (`NeckPracticeModelsChangelog.swift`) for each new version — it drives the post-update "What's New" sheet and About ▸ Version History.
 - Bump `MARKETING_VERSION` (user-facing version) in the target's build settings for each new App Store version; the build number is set automatically by the upload script.
 - Upload to TestFlight with `scripts/upload-testflight.sh` (archives, signs via App Store Connect API key, uploads; build number = timestamp). API key config lives outside the repo in `~/.appstoreconnect/` — never copy it into the project or print it.
+- Export signing is manual (`scripts/ExportOptions.plist`): the "Apple Distribution" certificate in Joe's login keychain plus four App Store profiles named "Guitar Man … App Store" (app + 3 extensions). The API key can't use Apple's cloud-managed certificate, so don't switch back to automatic. Certificate and profiles expire 2027-10-05; recreate the profiles with `scripts/asc.py POST /v1/profiles`. A new extension target needs its own profile in that plist.
 - Uploading, submitting for App Review, and releasing are outward-facing: confirm with Joe before each one.
 - Do not change `PRODUCT_BUNDLE_IDENTIFIER` or `DEVELOPMENT_TEAM` — the live App Store listing depends on them.
 
