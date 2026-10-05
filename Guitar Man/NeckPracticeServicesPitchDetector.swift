@@ -125,18 +125,14 @@ final class PitchDetector {
             return
         }
 
-        let session = AVAudioSession.sharedInstance()
-
         do {
-            try session.setCategory(.playAndRecord, mode: .default,
-                                     options: [.defaultToSpeaker, .allowBluetoothA2DP])
-            try session.setActive(true)
+            try AudioSessionSetup.activateRecording()
         } catch {
             print("PitchDetector: session setup failed: \(error)")
             return
         }
 
-        guard session.isInputAvailable else {
+        guard AVAudioSession.sharedInstance().isInputAvailable else {
             print("PitchDetector: no audio input available")
             return
         }

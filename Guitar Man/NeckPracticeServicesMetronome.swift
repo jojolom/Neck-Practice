@@ -84,9 +84,7 @@ final class Metronome {
         guard !isPlaying else { return }
 
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
-            try session.setActive(true)
+            try AudioSessionSetup.activatePlayback()
             try engine.start()
             playerNode.play()
             isPlaying = true
