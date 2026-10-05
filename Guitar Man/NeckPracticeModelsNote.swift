@@ -171,6 +171,14 @@ enum Note: Int, CaseIterable, Identifiable, CustomStringConvertible, Codable {
     /// whether the key is minor.
     func spelled(inKey key: Note, asDegree degreeIndex: Int, keyIsMinor: Bool) -> String {
         let (rootLetter, _) = key.keyLetterInfo(asMinor: keyIsMinor)
+        return spelled(rootLetter: rootLetter, degree: degreeIndex)
+    }
+
+    /// This note named with the letter `degreeIndex` steps above `rootLetter` (0=C … 6=B).
+    /// For keys spelled differently from `keyLetterInfo`, e.g. the circle of fifths' D♯ minor.
+    ///
+    /// Example: `Note.f.spelled(rootLetter: 1, degree: 1)` (2nd of D♯ minor) → "E#"
+    func spelled(rootLetter: Int, degree degreeIndex: Int) -> String {
         let targetLetter = (rootLetter + degreeIndex) % 7
         let naturalSemitone = Self.naturalSemitones[targetLetter]
         var accidental = (self.rawValue - naturalSemitone + 12) % 12
@@ -184,6 +192,12 @@ enum Note: Int, CaseIterable, Identifiable, CustomStringConvertible, Codable {
         case -2: return "\(name)bb"
         default: return name
         }
+    }
+
+    /// Letter index (0=C … 6=B) of a written note or key name such as "D♯m" or "Bb".
+    static func letterIndex(of name: String) -> Int? {
+        guard let first = name.first else { return nil }
+        return letterNames.firstIndex(of: String(first))
     }
 
     // MARK: - Circle of fifths

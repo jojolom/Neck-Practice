@@ -41,7 +41,7 @@ private let allKeys: [CoFKey] = [
     CoFKey(id: 3,  majorLabel: "A",  minorLabel: "F♯m",  enharmonicMajor: nil,   enharmonicMinor: nil,    signatureDescription: "3♯",   accidentalNotes: "F♯, C♯, G♯",              majorRoot: .a,      minorRoot: .fSharp),
     CoFKey(id: 4,  majorLabel: "E",  minorLabel: "C♯m",  enharmonicMajor: nil,   enharmonicMinor: nil,    signatureDescription: "4♯",   accidentalNotes: "F♯, C♯, G♯, D♯",          majorRoot: .e,      minorRoot: .cSharp),
     CoFKey(id: 5,  majorLabel: "B",  minorLabel: "G♯m",  enharmonicMajor: "C♭",  enharmonicMinor: "A♭m",  signatureDescription: "5♯/7♭", accidentalNotes: "F♯, C♯, G♯, D♯, A♯",     majorRoot: .b,      minorRoot: .gSharp),
-    CoFKey(id: 6,  majorLabel: "F♯", minorLabel: "D♯m",  enharmonicMajor: "G♭",  enharmonicMinor: "E♭m",  signatureDescription: "6♯/6♭", accidentalNotes: "All notes",               majorRoot: .fSharp, minorRoot: .dSharp),
+    CoFKey(id: 6,  majorLabel: "F♯", minorLabel: "D♯m",  enharmonicMajor: "G♭",  enharmonicMinor: "E♭m",  signatureDescription: "6♯/6♭", accidentalNotes: "F♯, C♯, G♯, D♯, A♯, E♯", majorRoot: .fSharp, minorRoot: .dSharp),
     CoFKey(id: 7,  majorLabel: "D♭", minorLabel: "B♭m",  enharmonicMajor: "C♯",  enharmonicMinor: "A♯m",  signatureDescription: "7♯/5♭", accidentalNotes: "B♭, E♭, A♭, D♭, G♭",     majorRoot: .cSharp, minorRoot: .aSharp),
     CoFKey(id: 8,  majorLabel: "A♭", minorLabel: "Fm",   enharmonicMajor: nil,   enharmonicMinor: nil,    signatureDescription: "4♭",   accidentalNotes: "B♭, E♭, A♭, D♭",          majorRoot: .gSharp, minorRoot: .f),
     CoFKey(id: 9,  majorLabel: "E♭", minorLabel: "Cm",   enharmonicMajor: nil,   enharmonicMinor: nil,    signatureDescription: "3♭",   accidentalNotes: "B♭, E♭, A♭",              majorRoot: .dSharp, minorRoot: .c),
@@ -252,7 +252,15 @@ struct CircleOfFifthsView: View {
             ? "Relative minor: \(key.minorLabel)"
             : "Relative major: \(key.majorLabel)"
         let scale = isMajor ? key.majorScale : key.minorScale
-        let scaleNames = scale.map { $0.description }.joined(separator: "  ")
+        // Spell from the key's own letter, so F major reads B♭ (not A♯) and D♯ minor keeps E♯.
+        let rootLetter = Note.letterIndex(of: isMajor ? key.majorLabel : key.minorLabel) ?? 0
+        let scaleNames = scale.enumerated()
+            .map { degree, note in
+                note.spelled(rootLetter: rootLetter, degree: degree)
+                    .replacingOccurrences(of: "#", with: "♯")
+                    .replacingOccurrences(of: "b", with: "♭")
+            }
+            .joined(separator: "  ")
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
