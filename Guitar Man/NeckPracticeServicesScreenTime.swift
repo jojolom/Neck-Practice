@@ -71,6 +71,9 @@ final class ScreenTimeBlocker {
         guard isAuthorized else { return false }
         ScreenTimeShared.isBlockingEnabled = true
         isEnabled = true
+        // Record today's practice first: the monitor's first callback can arrive right away and
+        // covers the apps unless it sees you've practiced.
+        if practicedToday { ScreenTimeShared.markPracticedToday() }
         startDailyMonitoring()
         reconcile(practicedToday: practicedToday)
         return true
