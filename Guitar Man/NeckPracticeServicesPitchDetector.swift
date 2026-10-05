@@ -15,6 +15,7 @@
 import Accelerate
 import AVFoundation
 import Observation
+import UIKit
 
 // MARK: - GuitarString
 
@@ -114,6 +115,10 @@ final class PitchDetector {
     private let lockStateLock = NSLock()
     private var lockedStringId: Int? = nil
 
+    private var isTapInstalled = false
+    /// Interruption, route-change and background observers, while listening.
+    private var observers: [any NSObjectProtocol] = []
+
     // MARK: - Public methods
 
     func start() async {
@@ -132,43 +137,17 @@ final class PitchDetector {
             return
         }
 
-        guard AVAudioSession.sharedInstance().isInputAvailable else {
-            print("PitchDetector: no audio input available")
-            return
-        }
-
-        resetTracking()
-
-        let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
-        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
-            print("PitchDetector: invalid input format: \(recordingFormat)")
-            return
-        }
-
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: recordingFormat) {
-            [weak self] buffer, _ in
-            self?.processBuffer(buffer, sampleRate: buffer.format.sampleRate)
-        }
-
-        do {
-            try engine.start()
-            isListening = true
-        } catch {
-            inputNode.removeTap(onBus: 0)
-            print("PitchDetector: engine start failed: \(error)")
-        }
+        guard startEngine() else { return }
+        isListening = true
+        observeAudioChanges()
     }
 
     func stop() {
         guard isListening else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+        stopEngine()
         isListening = false
-        detectedFrequency = nil
-        centsOffset = 0
-        signalLevel = 0
     }
 
     func resetTunedStrings() {
@@ -181,6 +160,87 @@ final class PitchDetector {
         lockStateLock.withLock { lockedStringId = string?.id }
         lockedString = string
         if let string { targetString = string }
+    }
+
+    // MARK: - Engine
+
+    /// Installs the mic tap (in the input's current format) and starts the engine.
+    private func startEngine() -> Bool {
+        guard AVAudioSession.sharedInstance().isInputAvailable else {
+            print("PitchDetector: no audio input available")
+            return false
+        }
+
+        resetTracking()
+
+        let inputNode = engine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+
+        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+            print("PitchDetector: invalid input format: \(recordingFormat)")
+            return false
+        }
+
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: recordingFormat) {
+            [weak self] buffer, _ in
+            self?.processBuffer(buffer, sampleRate: buffer.format.sampleRate)
+        }
+        isTapInstalled = true
+
+        do {
+            try engine.start()
+            return true
+        } catch {
+            stopEngine()
+            print("PitchDetector: engine start failed: \(error)")
+            return false
+        }
+    }
+
+    /// Removes the tap, stops the engine, and clears the reading.
+    private func stopEngine() {
+        if isTapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            isTapInstalled = false
+        }
+        engine.stop()
+        detectedFrequency = nil
+        centsOffset = 0
+        signalLevel = 0
+    }
+
+    /// Listens again after iOS stopped the engine. The input may have changed (headphones, an
+    /// interface), so the tap is installed fresh in its current format. Not in the background:
+    /// coming back to the app restarts it.
+    private func restartEngine() {
+        guard isListening, UIApplication.shared.applicationState != .background else { return }
+        stopEngine()
+        try? AVAudioSession.sharedInstance().setActive(true)
+        _ = startEngine()
+    }
+
+    private func observeAudioChanges() {
+        observers = [
+            // A call, Siri or an alarm stops the engine; listen again when it's over.
+            AudioSessionSetup.observe(AVAudioSession.interruptionNotification) { [weak self] notification in
+                if AudioInterruption(notification).began {
+                    self?.stopEngine()
+                } else {
+                    self?.restartEngine()
+                }
+            },
+            // The engine stops itself when the audio hardware changes.
+            AudioSessionSetup.observe(.AVAudioEngineConfigurationChange, object: engine) { [weak self] _ in
+                self?.restartEngine()
+            },
+            // Let go of the mic in the background and pick it up again on return.
+            AudioSessionSetup.observe(UIApplication.didEnterBackgroundNotification) { [weak self] _ in
+                self?.stopEngine()
+            },
+            AudioSessionSetup.observe(UIApplication.willEnterForegroundNotification) { [weak self] _ in
+                self?.restartEngine()
+            },
+        ]
     }
 
     private func resetTracking() {
