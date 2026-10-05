@@ -89,7 +89,8 @@ final class PentatonicSession {
     // MARK: - Private
 
     private func drawNext() {
-        let candidates = pool
+        // Only shapes that fit within frets 1...maxFret in some key (a low max fret rules some out).
+        let candidates = pool.filter { !validRoots(for: $0).isEmpty }
         guard !candidates.isEmpty else { currentQuestion = nil; return }
 
         let weighted = candidates.flatMap { shape in
@@ -97,61 +98,26 @@ final class PentatonicSession {
         }
         let filtered = weighted.filter { $0.id != currentQuestion?.shape.id }
         let source   = filtered.isEmpty ? weighted : filtered
-        guard let shape = source.randomElement() else { currentQuestion = nil; return }
+        guard let shape = source.randomElement(),
+              let rootNote = validRoots(for: shape).randomElement() else { currentQuestion = nil; return }
 
         // Pick a quality
         let quality: PentatonicQuality = qualityFilter ?? PentatonicQuality.allCases.randomElement()!
 
-        // Build a question: try up to 20 random root notes until one gives a valid fret range
-        for _ in 0..<20 {
-            guard let rootNote = Note.allCases.randomElement() else { continue }
-            guard let question = makeQuestion(shape: shape, quality: quality, rootNote: rootNote) else { continue }
-            currentQuestion = question
-            questionGeneration += 1
-            return
-        }
-
-        // Fallback: try every note
-        for rootNote in Note.allCases {
-            if let question = makeQuestion(shape: shape, quality: quality, rootNote: rootNote) {
-                currentQuestion = question
-                questionGeneration += 1
-                return
-            }
-        }
-
-        currentQuestion = nil
-    }
-
-    private func makeQuestion(shape: PentatonicShape, quality: PentatonicQuality, rootNote: Note) -> PentatonicQuestion? {
-        // Determine the anchorFret from the root note and the shape's root location on low E.
-        // If the shape has a root on low E, use that; otherwise use the A-string root.
-        let anchorFret: Int
-
-        if let rootOffsetOnLowE = shape.rootOffsetOnLowE {
-            // anchor = fret on low E that sounds rootNote - rootOffsetOnLowE
-            let rawFretOnLowE = fretOnLowE(for: rootNote)
-            // Try the base octave first, then +12 if needed
-            let candidate = rawFretOnLowE - rootOffsetOnLowE
-            anchorFret = candidate < 1 ? candidate + 12 : candidate
-        } else if let rootOffsetOnA = shape.rootOffsetOnAString {
-            let rawFretOnA = fretOnAString(for: rootNote)
-            let candidate = rawFretOnA - rootOffsetOnA
-            anchorFret = candidate < 1 ? candidate + 12 : candidate
-        } else {
-            return nil
-        }
-
-        let question = PentatonicQuestion(
+        currentQuestion = PentatonicQuestion(
             shape: shape,
             quality: quality,
             rootNote: rootNote,
-            anchorFret: anchorFret
+            anchorFret: shape.anchorFret(forMinorRoot: rootNote)
         )
+        questionGeneration += 1
+    }
 
-        // Validate all frets are in playable range
-        guard question.minFret >= 1, question.maxFret <= maxFret else { return nil }
-
-        return question
+    /// Minor roots for which every fret of `shape` falls within 1...maxFret.
+    private func validRoots(for shape: PentatonicShape) -> [Note] {
+        Note.allCases.filter { root in
+            let anchor = shape.anchorFret(forMinorRoot: root)
+            return anchor + shape.minOffset >= 1 && anchor + shape.maxOffset <= maxFret
+        }
     }
 }

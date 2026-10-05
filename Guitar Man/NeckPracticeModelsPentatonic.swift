@@ -55,6 +55,15 @@ struct PentatonicShape: Identifiable {
         guard let marker = rootMarkers.first(where: { $0.stringIndex == 4 }) else { return nil }
         return stringOffsets[4][marker.offsetIndex]
     }
+
+    /// The anchorFret that puts this shape in the given minor key: the low-E fret that sounds
+    /// the root. Every shape's offsets are measured from it — including shapes with no root on
+    /// the low E (Position 2's roots are on strings 4 and 2). Moved up an octave if the shape
+    /// would otherwise start below fret 1.
+    func anchorFret(forMinorRoot root: Note) -> Int {
+        let fret = fretOnLowE(for: root)
+        return fret + minOffset < 1 ? fret + 12 : fret
+    }
 }
 
 // MARK: - All 5 Shapes
