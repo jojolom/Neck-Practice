@@ -264,11 +264,12 @@ private struct StaffNotationView: View {
             let noteX = size.width / 2 + 20
 
             // ── Ledger lines ─────────────────────────────────
+            // Only up to the note: a note in a space gets no line on its far side.
             let ledgerHalf: CGFloat = noteHeadWidth + 4
             if staffPos < 0 {
                 // Below the staff
                 var pos = -2  // first ledger line below = position -2
-                while pos >= staffPos - 1 {
+                while pos >= staffPos {
                     let ly = yForPosition(pos)
                     let lpath = Path { p in
                         p.move(to: CGPoint(x: noteX - ledgerHalf, y: ly))
@@ -281,7 +282,7 @@ private struct StaffNotationView: View {
             if staffPos > 8 {
                 // Above the staff (top line = position 8)
                 var pos = 10
-                while pos <= staffPos + 1 {
+                while pos <= staffPos {
                     let ly = yForPosition(pos)
                     let lpath = Path { p in
                         p.move(to: CGPoint(x: noteX - ledgerHalf, y: ly))
