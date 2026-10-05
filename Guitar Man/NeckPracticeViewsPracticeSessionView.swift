@@ -148,7 +148,7 @@ struct PracticeSessionView: View {
                     }
 
                     Button {
-                        advanceStep()
+                        advanceStep(completed: false)
                     } label: {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 14, weight: .semibold))
@@ -157,6 +157,7 @@ struct PracticeSessionView: View {
                             .background(Color(.tertiarySystemFill))
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel("Skip step")
                 }
             }
 
@@ -259,7 +260,7 @@ struct PracticeSessionView: View {
                 playWarningCue()
             }
         } else {
-            advanceStep()
+            advanceStep(completed: true)
         }
     }
 
@@ -287,11 +288,15 @@ struct PracticeSessionView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
-    private func advanceStep() {
+    /// Moves to the next step. Only a step whose timer ran out counts toward the session (and
+    /// the streak and app blocking); skipping one doesn't.
+    private func advanceStep(completed: Bool) {
         guard let step = currentStep else { return }
-        completedSteps += 1
-        completedKinds.append(step.kind)
-        totalMinutesCompleted += step.minutes
+        if completed {
+            completedSteps += 1
+            completedKinds.append(step.kind)
+            totalMinutesCompleted += step.minutes
+        }
         if isFinalStep {
             currentIndex = plan.steps.count   // triggers finishedView
             isFinished = true
