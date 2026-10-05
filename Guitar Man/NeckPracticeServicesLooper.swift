@@ -14,6 +14,7 @@
 import Accelerate
 import AVFoundation
 import Observation
+import UIKit
 
 // MARK: - LooperState
 
@@ -108,6 +109,10 @@ final class Looper {
 
     private var isStarted = false
     private var isTapInstalled = false
+    /// Sample rate of the input tap; the input's rate can change with the audio route.
+    private var tapSampleRate: Double = 0
+    /// Interruption, route-change and background observers, while the looper is running.
+    private var observers: [any NSObjectProtocol] = []
     /// When set, the current overdub replaces this layer instead of adding a new one.
     private var replacingLayerIndex: Int? = nil
 
@@ -162,12 +167,15 @@ final class Looper {
         do {
             try engine.start()
             isStarted = true
+            observeAudioChanges()
         } catch {
             print("Looper: engine start failed: \(error)")
         }
     }
 
     func stop() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
         cancelCountIn()
         progressTimer?.invalidate()
         progressTimer = nil
@@ -211,7 +219,7 @@ final class Looper {
         if state == .countingIn { cancelCountIn() }
         guard state == .playing || state == .overdubbing else { return }
         if state == .overdubbing {
-            stopOverdub()
+            finishOverdub()
         }
         playerNode.stop()
         showStopped()
@@ -431,16 +439,27 @@ final class Looper {
 
     private func stopRecording() {
         // The 5-minute auto-stop can queue this more than once.
-        guard state == .recording else { return }
+        guard state == .recording, finishBaseRecording() else { return }
+        if scheduleLoop() {
+            state = .playing
+        } else {
+            showStopped()
+        }
+    }
+
+    /// Ends the first recording and keeps it as the loop (up to 5 minutes), without starting
+    /// playback. False, and back to empty, if it was too short to loop.
+    @discardableResult
+    private func finishBaseRecording() -> Bool {
         removeInputTap()
         recordingStartTime = nil
 
         guard let format = recordingFormat else {
             state = .empty
-            return
+            return false
         }
 
-        let samples = takeRecordedSamples()
+        let samples = takeRecordedSamples(at: format.sampleRate)
 
         let sampleRate = format.sampleRate
         let duration = Double(samples.count) / sampleRate
@@ -451,7 +470,7 @@ final class Looper {
             progressTimer?.invalidate()
             progressTimer = nil
             currentTime = 0
-            return
+            return false
         }
 
         let frameCount: Int
@@ -467,12 +486,7 @@ final class Looper {
 
         layers.append(trimmed)
         layerCount = layers.count
-
-        if scheduleLoop() {
-            state = .playing
-        } else {
-            showStopped()
-        }
+        return true
     }
 
     // MARK: - Overdubbing
@@ -500,14 +514,27 @@ final class Looper {
     }
 
     private func stopOverdub() {
+        if finishOverdub() {
+            swapMixAtLoopBoundary()
+        }
+        state = .playing
+    }
+
+    /// Ends an overdub and stores it (as a new layer, or over the one being re-recorded), lined
+    /// up with where it started in the loop. Doesn't touch playback. False if nothing was captured.
+    @discardableResult
+    private func finishOverdub() -> Bool {
         removeInputTap()
 
-        let samples = takeRecordedSamples()
-
-        guard !samples.isEmpty, loopFrameCount > 0, let format = recordingFormat else {
-            state = .playing
+        guard loopFrameCount > 0, let format = recordingFormat else {
+            discardRecordedSamples()
             replacingLayerIndex = nil
-            return
+            return false
+        }
+        let samples = takeRecordedSamples(at: format.sampleRate)
+        guard !samples.isEmpty else {
+            replacingLayerIndex = nil
+            return false
         }
 
         // What the player heard and played along to is output-latency old, and what the mic
@@ -533,8 +560,7 @@ final class Looper {
         }
 
         soloIndex = nil
-        swapMixAtLoopBoundary()
-        state = .playing
+        return true
     }
 
     /// Places `samples` into a zeroed buffer of `loopLength` frames starting at `startFrame`
@@ -557,7 +583,8 @@ final class Looper {
     // MARK: - Playback
 
     private func resumePlayback() {
-        guard mixedBuffer != nil, scheduleLoop() else { return }
+        // scheduleLoop() builds the mix (a take kept during an interruption doesn't have one yet).
+        guard !layers.isEmpty, scheduleLoop() else { return }
         state = .playing
         startProgressTimer()
     }
@@ -694,6 +721,7 @@ final class Looper {
         guard !isTapInstalled, isStarted else { return }
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        tapSampleRate = format.sampleRate
 
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) {
             [weak self] buffer, _ in
@@ -757,11 +785,68 @@ final class Looper {
         return Array(chunks.joined())
     }
 
+    /// Everything recorded so far at the loop's sample rate (converted if the audio route
+    /// changed the input's rate since the loop was made), and clears the store.
+    private func takeRecordedSamples(at rate: Double) -> [Float] {
+        LoopLibrary.resample(takeRecordedSamples(), from: tapSampleRate, to: rate)
+    }
+
     private func discardRecordedSamples() {
         recordLock.lock()
         recordedChunks.removeAll()
         recordedFrameCount = 0
         recordLock.unlock()
+    }
+
+    // MARK: - Interruptions and route changes
+
+    private func observeAudioChanges() {
+        observers = [
+            AudioSessionSetup.observe(AVAudioSession.interruptionNotification) { [weak self] notification in
+                if AudioInterruption(notification).began {
+                    self?.haltForSystemAudio()
+                } else {
+                    _ = self?.ensureEngineRunning()   // ready again; tap Play to resume the loop
+                }
+            },
+            // The engine stops itself when the audio hardware changes: headphones, AirPods,
+            // or an audio interface plugged in or out.
+            AudioSessionSetup.observe(.AVAudioEngineConfigurationChange, object: engine) { [weak self] _ in
+                self?.handleRouteChange()
+            },
+            // Without background audio, iOS silences the app once you leave it.
+            AudioSessionSetup.observe(UIApplication.didEnterBackgroundNotification) { [weak self] _ in
+                self?.haltForSystemAudio()
+            },
+        ]
+    }
+
+    /// iOS took the audio away (a call, Siri, an alarm, leaving the app) or the route changed:
+    /// keep what was recorded so far and stop, so nothing is left "playing" on a stopped engine.
+    private func haltForSystemAudio() {
+        if state == .recording {
+            if finishBaseRecording() {
+                playerNode.stop()
+                showStopped()
+            }
+        } else {
+            stopPlayback()
+        }
+    }
+
+    /// The engine stopped because the audio hardware changed. Stop like an interruption, adopt
+    /// the new input format if there's no loop yet (otherwise new takes are converted to the
+    /// loop's rate), and get the engine running again.
+    private func handleRouteChange() {
+        haltForSystemAudio()
+        let input = engine.inputNode.outputFormat(forBus: 0)
+        if layers.isEmpty, input.sampleRate > 0, input.sampleRate != recordingFormat?.sampleRate,
+           let loopFormat = AVAudioFormat(standardFormatWithSampleRate: input.sampleRate, channels: 1) {
+            recordingFormat = input
+            engine.disconnectNodeOutput(playerNode)
+            engine.connect(playerNode, to: engine.mainMixerNode, format: loopFormat)
+        }
+        _ = ensureEngineRunning()
     }
 
     // MARK: - Progress timer
