@@ -25,7 +25,11 @@ final class AudioPlayer {
 
     // MARK: - Engine
     private let engine = AVAudioEngine()
+    /// True once the node graph is built (the engine itself is started on demand).
     private var isReady = false
+    /// Rate the voices are synthesized at: the source node's format, fixed when the graph is
+    /// built. (The output's rate can change later, e.g. with Bluetooth; the mixer converts.)
+    private var sampleRate: Double = 48000
 
     // Serialise access to active voices from the render thread and main thread.
     private let voiceLock = NSLock()
@@ -57,7 +61,8 @@ final class AudioPlayer {
 
     private func setup() {
 
-        let sampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
+        let outputRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
+        if outputRate > 0 { sampleRate = outputRate }
         let monoFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
 
         let sourceNode = AVAudioSourceNode(format: monoFormat) { [weak self] _, _, frameCount, audioBufferList -> OSStatus in
@@ -89,12 +94,23 @@ final class AudioPlayer {
         // Connect using the same mono format the source node was created with.
         // AVAudioEngine will handle upmixing to stereo at the output stage.
         engine.connect(sourceNode, to: engine.mainMixerNode, format: monoFormat)
+        isReady = true
+        startEngineIfNeeded()
+    }
 
+    /// iOS stops the engine for calls, Siri, alarms and route changes (and when the tuner or
+    /// looper switch the session to recording), so start it again before playing. False if it
+    /// can't run right now, e.g. during a call.
+    @discardableResult
+    private func startEngineIfNeeded() -> Bool {
+        guard !engine.isRunning else { return true }
         do {
+            try AVAudioSession.sharedInstance().setActive(true)
             try engine.start()
-            isReady = true
+            return true
         } catch {
             print("AudioPlayer: engine start failed: \(error)")
+            return false
         }
     }
 
@@ -168,7 +184,9 @@ final class AudioPlayer {
     // MARK: - Private helpers
 
     private func scheduleNote(midi: UInt8) {
-        let sampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
+        guard startEngineIfNeeded() else { return }
+        // The source node's rate, not the output's: a voice tuned to a different rate than it's
+        // rendered at plays out of tune.
         let voice = KarplusVoice(midi: midi, sampleRate: sampleRate)
 
         voiceLock.lock()
