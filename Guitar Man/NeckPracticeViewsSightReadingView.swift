@@ -173,7 +173,7 @@ struct SightReadingView: View {
     private func playCurrentNote() {
         guard audioSettings.isEnabled else { return }
         isNewQuestionLocked = true
-        if let pitch = session.currentPitch {
+        if session.currentPitch != nil {
             AudioPlayer.shared.stopAll()
             // Play at the exact MIDI pitch
             let pos = session.validPositions.first

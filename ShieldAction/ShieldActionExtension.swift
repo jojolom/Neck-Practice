@@ -31,7 +31,8 @@ class ShieldActionExtension: ShieldActionDelegate {
         case .secondaryButtonPressed:
             // The shield comes off by itself once the store is cleared.
             completionHandler(ScreenTimeShared.beginUnlock() ? .none : .close)
-        @unknown default:
+        default:
+            // Submenu items (iOS 26.4+) aren't configured on our shield.
             completionHandler(.close)
         }
     }
