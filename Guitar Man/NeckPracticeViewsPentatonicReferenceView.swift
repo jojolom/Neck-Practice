@@ -24,22 +24,9 @@ struct PentatonicReferenceView: View {
 
     // MARK: - Computed data
 
-    /// Build a PentatonicQuestion for the current root + quality + shape.
+    /// The current shape in the picked key (the picker chooses the major or minor root you hear).
     private var currentQuestion: PentatonicQuestion {
-        let shape = allPentatonicShapes[shapeIndex]
-        let anchorFret: Int = {
-            if let rootOffset = shape.rootOffsetOnLowE {
-                let baseFret = fretOnLowE(for: rootNote)
-                let anchor = baseFret - rootOffset
-                return anchor <= 0 ? anchor + 12 : anchor
-            } else if let rootOffset = shape.rootOffsetOnAString {
-                let baseFret = fretOnAString(for: rootNote)
-                let anchor = baseFret - rootOffset
-                return anchor <= 0 ? anchor + 12 : anchor
-            }
-            return fretOnLowE(for: rootNote)
-        }()
-        return PentatonicQuestion(shape: shape, quality: quality, rootNote: rootNote, anchorFret: anchorFret)
+        PentatonicQuestion(shape: allPentatonicShapes[shapeIndex], quality: quality, key: rootNote)
     }
 
     private var highlightedPositions: Set<FretboardPosition> {

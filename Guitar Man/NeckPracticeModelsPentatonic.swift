@@ -43,19 +43,6 @@ struct PentatonicShape: Identifiable {
     /// The offset from anchorFret of the highest fret in the entire shape.
     var maxOffset: Int { stringOffsets.flatMap { $0 }.max() ?? 0 }
 
-    /// The root offset on string 6 (stringIndex 5). Used to derive anchorFret.
-    /// If string 6 has a root marker, use it; otherwise fall back to string 5 (A).
-    var rootOffsetOnLowE: Int? {
-        guard let marker = rootMarkers.first(where: { $0.stringIndex == 5 }) else { return nil }
-        return stringOffsets[5][marker.offsetIndex]
-    }
-
-    /// Fall-back root on string 5 (A string) for positions without a low-E root.
-    var rootOffsetOnAString: Int? {
-        guard let marker = rootMarkers.first(where: { $0.stringIndex == 4 }) else { return nil }
-        return stringOffsets[4][marker.offsetIndex]
-    }
-
     /// The anchorFret that puts this shape in the given minor key: the low-E fret that sounds
     /// the root. Every shape's offsets are measured from it — including shapes with no root on
     /// the low E (Position 2's roots are on strings 4 and 2). Moved up an octave if the shape
@@ -224,6 +211,16 @@ struct PentatonicQuestion {
 
     /// Lowest fret used — all dots must be ≥ 1.
     var minFret: Int { anchorFret + shape.minOffset }
+}
+
+extension PentatonicQuestion {
+    /// `shape` in the key it's named by: `key` is the minor root for minor pentatonic and the
+    /// major root for major (C major pentatonic is played with A minor pentatonic's boxes).
+    init(shape: PentatonicShape, quality: PentatonicQuality, key: Note) {
+        let minorRoot = quality.isMinor ? key : key.relativeMinor
+        self.init(shape: shape, quality: quality, rootNote: minorRoot,
+                  anchorFret: shape.anchorFret(forMinorRoot: minorRoot))
+    }
 }
 
 // MARK: - Helpers

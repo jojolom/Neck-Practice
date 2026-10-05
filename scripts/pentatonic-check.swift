@@ -3,7 +3,8 @@
 //
 //  Offline check for the Pentatonic Trainer: every draw produces a question (all 5 positions
 //  appear when they fit), every dot is within frets 1...maxFret, every dot is a note of the
-//  scale, and the root dots are the root.
+//  scale, and the root dots are the root. Also checks the Pentatonic Shapes reference shows
+//  the key you picked, in both qualities.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/pentatonic-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsPentatonicSession.swift" scripts/pentatonic-check.swift && /tmp/pentatonic-check
@@ -67,6 +68,19 @@ struct PentatonicCheck {
             check(bad.isEmpty, "max fret \(maxFret): every dot in range and in the scale\(bad.isEmpty ? "" : " — \(bad.prefix(3))")")
         }
         check(PentatonicSession().maxFret >= 12, "default max fret fits all 5 positions")
+
+        // Pentatonic Shapes reference: every picked key, both qualities, all 5 positions.
+        for quality in PentatonicQuality.allCases {
+            var bad: [String] = []
+            for key in Note.allCases {
+                for shape in allPentatonicShapes {
+                    let q = PentatonicQuestion(shape: shape, quality: quality, key: key)
+                    if q.effectiveRootNote != key { bad.append("\(key): shows \(q.effectiveRootNote)") }
+                    bad += problems(q, maxFret: 24).map { "\(key) Position \(shape.id): \($0)" }
+                }
+            }
+            check(bad.isEmpty, "reference \(quality): shows the picked key, every dot on fret 1+ and in the scale\(bad.isEmpty ? "" : " — \(bad.prefix(3))")")
+        }
 
         print(failures == 0 ? "0 failures" : "\(failures) failures")
         exit(failures == 0 ? 0 : 1)
