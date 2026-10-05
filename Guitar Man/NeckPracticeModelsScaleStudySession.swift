@@ -83,7 +83,8 @@ struct ScaleEntry: Identifiable {
     let string: Int
 
     var qualityLabel: String { isMajor ? "Major" : "Minor" }
-    var fullLabel: String { "\(root.description) \(qualityLabel)" }
+    /// Key name with conventional spelling, e.g. "Bb Major" rather than "A# Major".
+    var fullLabel: String { "\(root.keyName(asMinor: !isMajor)) \(qualityLabel)" }
 
     /// Fret info for where to start on the assigned string.
     var rootFretInfo: String {
