@@ -154,8 +154,14 @@ final class Looper {
 
         recordingFormat = format
 
+        // The loop is mono. Connecting with the input's channel count would make every mono
+        // buffer mismatch the player (an exception) on a multi-channel audio interface.
+        guard let loopFormat = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 1) else {
+            print("Looper: no mono format at \(format.sampleRate) Hz")
+            return
+        }
         engine.attach(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: format)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: loopFormat)
 
         do {
             try engine.start()
@@ -212,10 +218,7 @@ final class Looper {
             stopOverdub()
         }
         playerNode.stop()
-        progressTimer?.invalidate()
-        progressTimer = nil
-        state = .stopped
-        inputLevel = 0
+        showStopped()
     }
 
     func undo() {
@@ -301,9 +304,12 @@ final class Looper {
             layers = converted.map { Looper.fitted($0, to: frames) }
             layerCount = layers.count
             soloIndex = nil
-            scheduleLoop()
-            state = .playing
-            startProgressTimer()
+            if scheduleLoop() {
+                state = .playing
+                startProgressTimer()
+            } else {
+                showStopped()
+            }
         } else {
             let frames = Int(loopFrameCount)
             layers.append(contentsOf: converted.map { Looper.fitted($0, to: frames) })
@@ -419,7 +425,7 @@ final class Looper {
     // MARK: - Recording
 
     private func beginRecording() {
-        guard isStarted else { state = .empty; return }
+        guard isStarted, ensureEngineRunning() else { state = .empty; return }
         discardRecordedSamples()
         installInputTap()
         recordingStartTime = Date()
@@ -428,6 +434,8 @@ final class Looper {
     }
 
     private func stopRecording() {
+        // The 5-minute auto-stop can queue this more than once.
+        guard state == .recording else { return }
         removeInputTap()
         recordingStartTime = nil
 
@@ -464,14 +472,17 @@ final class Looper {
         layers.append(trimmed)
         layerCount = layers.count
 
-        scheduleLoop()
-        state = .playing
+        if scheduleLoop() {
+            state = .playing
+        } else {
+            showStopped()
+        }
     }
 
     // MARK: - Overdubbing
 
     private func beginOverdub() {
-        guard isStarted, layerCount < maxLayers else { state = .playing; return }
+        guard isStarted, layerCount < maxLayers, ensureEngineRunning() else { state = .playing; return }
         replacingLayerIndex = nil
         startCapturingOverdub()
     }
@@ -550,20 +561,43 @@ final class Looper {
     // MARK: - Playback
 
     private func resumePlayback() {
-        guard mixedBuffer != nil else { return }
-        scheduleLoop()
+        guard mixedBuffer != nil, scheduleLoop() else { return }
         state = .playing
         startProgressTimer()
     }
 
-    /// Plays the loop from its very beginning.
-    private func scheduleLoop() {
+    /// Shows the loop as stopped (after the player node has been stopped).
+    private func showStopped() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+        state = .stopped
+        inputLevel = 0
+    }
+
+    /// Plays the loop from its very beginning. False if the audio engine can't run right now.
+    @discardableResult
+    private func scheduleLoop() -> Bool {
         playbackOffsetFrames = 0
         buildMixedBuffer()
-        guard let buffer = mixedBuffer else { return }
         playerNode.stop()
+        guard let buffer = mixedBuffer, ensureEngineRunning() else { return false }
         playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
         playerNode.play()
+        return true
+    }
+
+    /// iOS stops the engine for calls, Siri, alarms and route changes, and playing a node on a
+    /// stopped engine throws. Starts it again if needed; false if it can't run right now.
+    private func ensureEngineRunning() -> Bool {
+        guard !engine.isRunning else { return true }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            try engine.start()
+            return true
+        } catch {
+            print("Looper: engine restart failed: \(error)")
+            return false
+        }
     }
 
     /// Where playback currently is within the loop, in frames, or nil if not playing.
@@ -571,7 +605,10 @@ final class Looper {
         guard loopFrameCount > 0, playerNode.isPlaying,
               let nodeTime = playerNode.lastRenderTime,
               let playerTime = playerNode.playerTime(forNodeTime: nodeTime) else { return nil }
-        return (Int(playerTime.sampleTime) + playbackOffsetFrames) % Int(loopFrameCount)
+        // The player's sample time can be slightly negative just after play(); keep this in
+        // 0..<length, since the mix is rotated by it.
+        let length = Int(loopFrameCount)
+        return ((Int(playerTime.sampleTime) + playbackOffsetFrames) % length + length) % length
     }
 
     /// Rebuilds the mix and swaps it in immediately, resuming from the current loop position
@@ -579,7 +616,7 @@ final class Looper {
     private func rebuildPreservingPosition() {
         playbackOffsetFrames = currentLoopPosition() ?? 0
         buildMixedBuffer()
-        guard playerNode.isPlaying, let buffer = mixedBuffer else { return }
+        guard playerNode.isPlaying, let buffer = mixedBuffer, ensureEngineRunning() else { return }
         playerNode.stop()
         playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
         playerNode.play()
