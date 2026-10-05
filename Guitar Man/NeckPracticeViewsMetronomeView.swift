@@ -31,9 +31,7 @@ struct MetronomeView: View {
 
             HStack(spacing: 16) {
                 ForEach(0..<metronome.beatsPerMeasure, id: \.self) { beat in
-                    let isActive = metronome.isPlaying
-                        && ((metronome.currentBeat + metronome.beatsPerMeasure - 1)
-                            % metronome.beatsPerMeasure) == beat
+                    let isActive = metronome.isPlaying && metronome.currentBeat == beat
                     Circle()
                         .fill(isActive
                               ? (beat == 0 ? Color.red : Color.accentColor)
