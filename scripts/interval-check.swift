@@ -4,10 +4,10 @@
 //  Offline check for the notation model and the Interval Trainer: key signature names, interval
 //  arithmetic (semitones, spelling, inversions, compounds), wrong-answer choices, thousands of
 //  generated questions (right interval, single accidentals, on the staff and the first 12 frets,
-//  fretboard placement), and triads spelled as chords.
+//  fretboard placement), triads spelled as chords, and the modes (spelling, formulas, fingerings, quiz).
 //
 //  Run from the repo root:
-//    swiftc -O -parse-as-library -o /tmp/interval-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsIntervalSession.swift" "Guitar Man/NeckPracticeModelsTriad.swift" scripts/interval-check.swift && /tmp/interval-check
+//    swiftc -O -parse-as-library -o /tmp/interval-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsIntervalSession.swift" "Guitar Man/NeckPracticeModelsTriad.swift" "Guitar Man/NeckPracticeModelsMode.swift" scripts/interval-check.swift && /tmp/interval-check
 //
 
 import Foundation
@@ -30,6 +30,7 @@ struct IntervalCheck {
         checkDistractors()
         checkSessions()
         checkTriads()
+        checkModes()
         print(failures == 0 ? "All interval checks passed." : "\(failures) failure(s).")
         exit(failures == 0 ? 0 : 1)
     }
@@ -186,5 +187,39 @@ struct IntervalCheck {
             check(q?.spelledPitches.map(\.name) == ["B", "D", "G"], "first-inversion G major is B D G")
         }
         print("ok   triads")
+    }
+
+    static func checkModes() {
+        let formulas = Mode.allCases.map { $0.degreeLabels.joined(separator: " ") }
+        check(formulas == ["1 2 3 4 5 6 7", "1 2 ♭3 4 5 6 ♭7", "1 ♭2 ♭3 4 5 ♭6 ♭7", "1 2 3 ♯4 5 6 7",
+                           "1 2 3 4 5 6 ♭7", "1 2 ♭3 4 5 ♭6 ♭7", "1 ♭2 ♭3 4 ♭5 ♭6 ♭7"], "mode formulas: \(formulas)")
+        check(Mode.dorian.comparison == "Natural minor with a ♮6", "Dorian: \(Mode.dorian.comparison)")
+        check(Mode.lydian.comparison == "Major with a ♯4", "Lydian: \(Mode.lydian.comparison)")
+        check(Mode.locrian.comparison == "Natural minor with a ♭2 and ♭5", "Locrian: \(Mode.locrian.comparison)")
+        check(ModeScale(mode: .dorian, root: .d).pitches().map(\.name) == ["D", "E", "F", "G", "A", "B", "C", "D"],
+              "D Dorian is the notes of C major")
+        check(ModeScale(mode: .lydian, root: .cSharp).name == "D♭ Lydian", "D♭ Lydian, not C♯ Lydian")
+        for mode in Mode.allCases {
+            for root in Note.allCases {
+                let scale = ModeScale(mode: mode, root: root)
+                check(abs(scale.parentKey.fifths) <= 6, "\(scale.name): \(scale.parentKey.fifths) accidentals")
+                let pitches = scale.pitches()
+                check(pitches.allSatisfy { abs($0.accidental) <= 1 }, "\(scale.name): double accidental")
+                check(pitches.first?.note == root && pitches.last?.midi == (pitches.first?.midi ?? 0) + 12,
+                      "\(scale.name): root to octave")
+                check(zip(pitches, mode.semitones).allSatisfy { $0.midi - pitches[0].midi == $1 }, "\(scale.name): notes")
+                let fingering = scale.threeNotesPerString
+                check(fingering.count == 18, "\(scale.name): 18 notes")
+                check(fingering.allSatisfy { $0.position.fret >= 0 && $0.position.fret <= 22 }, "\(scale.name): frets")
+                check(fingering.allSatisfy { $0.position.note == root.advanced(by: mode.semitones[$0.degree]) },
+                      "\(scale.name): fingering notes")
+                for kind in ModeQuestionKind.allCases {
+                    let q = ModeQuizSession.makeQuestion(kind: kind, scale: scale, choiceCount: 4)
+                    check(q.choices.count == 4 && Set(q.choices).count == 4 && q.choices.contains(q.answer),
+                          "\(scale.name) \(kind): choices \(q.choices)")
+                }
+            }
+        }
+        print("ok   modes")
     }
 }
