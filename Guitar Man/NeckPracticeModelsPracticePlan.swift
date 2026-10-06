@@ -23,6 +23,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
     case scaleStudy
     case sightReading
     case intervals
+    case modes
 
     var id: String { rawValue }
 
@@ -35,6 +36,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .scaleStudy:   return "Scale Study"
         case .sightReading: return "Sight Reading"
         case .intervals:    return "Interval Trainer"
+        case .modes:        return "Mode Quiz"
         }
     }
 
@@ -47,6 +49,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .scaleStudy:   return "music.quarternote.3"
         case .sightReading: return "music.note"
         case .intervals:    return "arrow.up.and.down"
+        case .modes:        return "circle.hexagongrid.fill"
         }
     }
 
@@ -59,6 +62,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .scaleStudy:   return .mint
         case .sightReading: return .teal
         case .intervals:    return .cyan
+        case .modes:        return .indigo
         }
     }
 }
@@ -75,6 +79,7 @@ struct StepConfig: Codable, Hashable {
     var scaleStudy: ScaleStudyStepConfig = ScaleStudyStepConfig()
     var sightReading: SightReadingStepConfig = SightReadingStepConfig()
     var intervals: IntervalStepConfig = IntervalStepConfig()
+    var modes: ModeStepConfig = ModeStepConfig()
 
     /// True if any sub-config has at least one non-nil override.
     var hasOverrides: Bool {
@@ -84,7 +89,8 @@ struct StepConfig: Codable, Hashable {
         romanNumeral.hasOverrides ||
         scaleStudy.hasOverrides ||
         sightReading.hasOverrides ||
-        intervals.hasOverrides
+        intervals.hasOverrides ||
+        modes.hasOverrides
     }
 }
 
@@ -100,6 +106,7 @@ extension StepConfig {
         scaleStudy = try c.decodeIfPresent(ScaleStudyStepConfig.self, forKey: .scaleStudy) ?? ScaleStudyStepConfig()
         sightReading = try c.decodeIfPresent(SightReadingStepConfig.self, forKey: .sightReading) ?? SightReadingStepConfig()
         intervals = try c.decodeIfPresent(IntervalStepConfig.self, forKey: .intervals) ?? IntervalStepConfig()
+        modes = try c.decodeIfPresent(ModeStepConfig.self, forKey: .modes) ?? ModeStepConfig()
     }
 }
 
@@ -164,6 +171,12 @@ struct IntervalStepConfig: Codable, Hashable {
     var hasOverrides: Bool { maxAccidentals != nil || includeDescending != nil || includeCompound != nil }
 }
 
+struct ModeStepConfig: Codable, Hashable {
+    var choiceCount: Int? = nil
+
+    var hasOverrides: Bool { choiceCount != nil }
+}
+
 // MARK: - PracticeStep
 
 /// One timed step inside a practice plan, optionally carrying per-tool
@@ -184,6 +197,7 @@ struct PracticeStep: Codable, Hashable, Identifiable {
         case .scaleStudy:   return config.scaleStudy.hasOverrides
         case .sightReading: return config.sightReading.hasOverrides
         case .intervals:    return config.intervals.hasOverrides
+        case .modes:        return config.modes.hasOverrides
         }
     }
 }
@@ -251,6 +265,13 @@ extension IntervalSession {
         if let v = override.maxAccidentals { maxAccidentals = v }
         if let v = override.includeDescending { includeDescending = v }
         if let v = override.includeCompound { includeCompound = v }
+    }
+}
+
+extension ModeQuizSession {
+    func apply(override: ModeStepConfig?) {
+        guard let override else { return }
+        if let v = override.choiceCount { choiceCount = v }
     }
 }
 

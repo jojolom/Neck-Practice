@@ -52,6 +52,7 @@ struct PracticeStepCustomizeView: View {
                 case .scaleStudy:   scaleStudySection
                 case .sightReading: sightReadingSection
                 case .intervals:    intervalsSection
+                case .modes:        modesSection
                 }
 
                 Section {
@@ -64,6 +65,7 @@ struct PracticeStepCustomizeView: View {
                         case .scaleStudy:   draft.config.scaleStudy = ScaleStudyStepConfig()
                         case .sightReading: draft.config.sightReading = SightReadingStepConfig()
                         case .intervals:    draft.config.intervals = IntervalStepConfig()
+                        case .modes:        draft.config.modes = ModeStepConfig()
                         }
                     }
                 } footer: {
@@ -278,6 +280,18 @@ struct PracticeStepCustomizeView: View {
                         value: $draft.config.intervals.includeCompound,
                         defaultValue: false) { binding in
                 Toggle("Compound Intervals", isOn: binding).labelsHidden()
+            }
+        }
+    }
+
+    // MARK: - Modes
+
+    private var modesSection: some View {
+        Section("Overrides") {
+            overrideRow(label: "Choice Count",
+                        value: $draft.config.modes.choiceCount,
+                        defaultValue: 4) { binding in
+                Stepper("\(binding.wrappedValue) choices", value: binding, in: 3...7)
             }
         }
     }

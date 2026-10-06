@@ -66,6 +66,13 @@ extension ExerciseItem {
             color: .cyan,
             isAvailable: true
         ),
+        ExerciseItem(
+            title: "Mode Quiz",
+            subtitle: "Name the modes and hear how they differ",
+            icon: "circle.hexagongrid.fill",
+            color: .indigo,
+            isAvailable: true
+        ),
     ]
 }
 
@@ -176,6 +183,10 @@ struct HomeView: View {
 
                             toolLink(destination: ScaleReferenceView(),
                                      title: "Scale Reference", icon: "music.note", color: .teal)
+                                .transition(toolTransition)
+
+                            toolLink(destination: ModeReferenceView(),
+                                     title: "Modes", icon: "circle.hexagongrid", color: .indigo)
                                 .transition(toolTransition)
 
                             toolLink(destination: PentatonicReferenceView(),
@@ -293,6 +304,7 @@ struct HomeView: View {
         case "Scale Study":         ScaleStudyView()
         case "Roman Numerals":     RomanNumeralView()
         case "Interval Trainer":    IntervalView()
+        case "Mode Quiz":           ModeQuizView()
         default:                    EmptyView()
         }
     }

@@ -199,6 +199,7 @@ struct PracticeSessionView: View {
         case .scaleStudy:   ScaleStudyView(override: config?.scaleStudy)
         case .sightReading: SightReadingView(override: config?.sightReading)
         case .intervals:    IntervalView(override: config?.intervals)
+        case .modes:        ModeQuizView(override: config?.modes)
         }
     }
 
