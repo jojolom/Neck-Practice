@@ -51,6 +51,7 @@ struct PracticeStepCustomizeView: View {
                 case .romanNumeral: romanNumeralSection
                 case .scaleStudy:   scaleStudySection
                 case .sightReading: sightReadingSection
+                case .intervals:    intervalsSection
                 }
 
                 Section {
@@ -62,6 +63,7 @@ struct PracticeStepCustomizeView: View {
                         case .romanNumeral: draft.config.romanNumeral = RomanNumeralStepConfig()
                         case .scaleStudy:   draft.config.scaleStudy = ScaleStudyStepConfig()
                         case .sightReading: draft.config.sightReading = SightReadingStepConfig()
+                        case .intervals:    draft.config.intervals = IntervalStepConfig()
                         }
                     }
                 } footer: {
@@ -253,6 +255,29 @@ struct PracticeStepCustomizeView: View {
                         value: $draft.config.sightReading.naturalsOnly,
                         defaultValue: true) { binding in
                 Toggle("Naturals Only", isOn: binding).labelsHidden()
+            }
+        }
+    }
+
+    // MARK: - Intervals
+
+    private var intervalsSection: some View {
+        Section("Overrides") {
+            overrideRow(label: "Key Signatures",
+                        value: $draft.config.intervals.maxAccidentals,
+                        defaultValue: 4) { binding in
+                Stepper(binding.wrappedValue == 0 ? "C major only" : "Up to \(binding.wrappedValue) ♯/♭",
+                        value: binding, in: 0...6)
+            }
+            overrideRow(label: "Higher Note First",
+                        value: $draft.config.intervals.includeDescending,
+                        defaultValue: true) { binding in
+                Toggle("Higher Note First", isOn: binding).labelsHidden()
+            }
+            overrideRow(label: "Compound Intervals",
+                        value: $draft.config.intervals.includeCompound,
+                        defaultValue: false) { binding in
+                Toggle("Compound Intervals", isOn: binding).labelsHidden()
             }
         }
     }

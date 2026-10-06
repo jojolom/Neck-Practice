@@ -412,6 +412,13 @@ struct Interval: Hashable, Codable, Identifiable {
         for other in (sameNumber + sameSound + neighbours).shuffled() where !picks.contains(other) {
             picks.append(other)
         }
+        // 4. Still short (octaves, 13ths): whatever sounds closest.
+        let closest = (Self.simplePool + Self.compoundPool + Self.commonAlternates)
+            .filter(allowed)
+            .sorted { abs($0.semitones - semitones) < abs($1.semitones - semitones) }
+        for other in closest where !picks.contains(other) {
+            picks.append(other)
+        }
         return Array(picks.prefix(count))
     }
 }

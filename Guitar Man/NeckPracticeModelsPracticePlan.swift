@@ -22,6 +22,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
     case romanNumeral
     case scaleStudy
     case sightReading
+    case intervals
 
     var id: String { rawValue }
 
@@ -33,6 +34,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .romanNumeral: return "Roman Numerals"
         case .scaleStudy:   return "Scale Study"
         case .sightReading: return "Sight Reading"
+        case .intervals:    return "Interval Trainer"
         }
     }
 
@@ -44,6 +46,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .romanNumeral: return "number.circle.fill"
         case .scaleStudy:   return "music.quarternote.3"
         case .sightReading: return "music.note"
+        case .intervals:    return "arrow.up.and.down"
         }
     }
 
@@ -55,6 +58,7 @@ enum PracticeStepKind: String, Codable, CaseIterable, Identifiable, Hashable {
         case .romanNumeral: return .pink
         case .scaleStudy:   return .mint
         case .sightReading: return .teal
+        case .intervals:    return .cyan
         }
     }
 }
@@ -70,6 +74,7 @@ struct StepConfig: Codable, Hashable {
     var romanNumeral: RomanNumeralStepConfig = RomanNumeralStepConfig()
     var scaleStudy: ScaleStudyStepConfig = ScaleStudyStepConfig()
     var sightReading: SightReadingStepConfig = SightReadingStepConfig()
+    var intervals: IntervalStepConfig = IntervalStepConfig()
 
     /// True if any sub-config has at least one non-nil override.
     var hasOverrides: Bool {
@@ -78,7 +83,23 @@ struct StepConfig: Codable, Hashable {
         triad.hasOverrides ||
         romanNumeral.hasOverrides ||
         scaleStudy.hasOverrides ||
-        sightReading.hasOverrides
+        sightReading.hasOverrides ||
+        intervals.hasOverrides
+    }
+}
+
+extension StepConfig {
+    /// Plans saved before a trainer existed have no entry for it: fall back to its defaults
+    /// instead of failing to decode (which would throw away the user's plans).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        quiz = try c.decodeIfPresent(QuizStepConfig.self, forKey: .quiz) ?? QuizStepConfig()
+        pentatonic = try c.decodeIfPresent(PentatonicStepConfig.self, forKey: .pentatonic) ?? PentatonicStepConfig()
+        triad = try c.decodeIfPresent(TriadStepConfig.self, forKey: .triad) ?? TriadStepConfig()
+        romanNumeral = try c.decodeIfPresent(RomanNumeralStepConfig.self, forKey: .romanNumeral) ?? RomanNumeralStepConfig()
+        scaleStudy = try c.decodeIfPresent(ScaleStudyStepConfig.self, forKey: .scaleStudy) ?? ScaleStudyStepConfig()
+        sightReading = try c.decodeIfPresent(SightReadingStepConfig.self, forKey: .sightReading) ?? SightReadingStepConfig()
+        intervals = try c.decodeIfPresent(IntervalStepConfig.self, forKey: .intervals) ?? IntervalStepConfig()
     }
 }
 
@@ -135,6 +156,14 @@ struct SightReadingStepConfig: Codable, Hashable {
     var hasOverrides: Bool { maxFret != nil || naturalsOnly != nil }
 }
 
+struct IntervalStepConfig: Codable, Hashable {
+    var maxAccidentals: Int? = nil
+    var includeDescending: Bool? = nil
+    var includeCompound: Bool? = nil
+
+    var hasOverrides: Bool { maxAccidentals != nil || includeDescending != nil || includeCompound != nil }
+}
+
 // MARK: - PracticeStep
 
 /// One timed step inside a practice plan, optionally carrying per-tool
@@ -154,6 +183,7 @@ struct PracticeStep: Codable, Hashable, Identifiable {
         case .romanNumeral: return config.romanNumeral.hasOverrides
         case .scaleStudy:   return config.scaleStudy.hasOverrides
         case .sightReading: return config.sightReading.hasOverrides
+        case .intervals:    return config.intervals.hasOverrides
         }
     }
 }
@@ -212,6 +242,15 @@ extension SightReadingSession {
         guard let override else { return }
         if let v = override.maxFret { maxFret = v }
         if let v = override.naturalsOnly { naturalsOnly = v }
+    }
+}
+
+extension IntervalSession {
+    func apply(override: IntervalStepConfig?) {
+        guard let override else { return }
+        if let v = override.maxAccidentals { maxAccidentals = v }
+        if let v = override.includeDescending { includeDescending = v }
+        if let v = override.includeCompound { includeCompound = v }
     }
 }
 

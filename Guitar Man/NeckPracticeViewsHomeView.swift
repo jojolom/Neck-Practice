@@ -59,6 +59,13 @@ extension ExerciseItem {
             color: .pink,
             isAvailable: true
         ),
+        ExerciseItem(
+            title: "Interval Trainer",
+            subtitle: "Name intervals on the staff, then find them on the neck",
+            icon: "arrow.up.and.down",
+            color: .cyan,
+            isAvailable: true
+        ),
     ]
 }
 
@@ -285,6 +292,7 @@ struct HomeView: View {
         case "Sight Reading":       SightReadingView()
         case "Scale Study":         ScaleStudyView()
         case "Roman Numerals":     RomanNumeralView()
+        case "Interval Trainer":    IntervalView()
         default:                    EmptyView()
         }
     }

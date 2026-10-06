@@ -46,11 +46,20 @@ struct FretboardView: View {
         let isMinor: Bool
     }
 
+    /// Labels that replace the note name on specific dots (a note spelled for its key, or a
+    /// scale degree like "♭3").
+    var customLabels: [FretboardPosition: String] = [:]
+
     /// Returns the proper enharmonic spelling for `note` given the current
     /// key context, or the chromatic default if there's no context.
     private func label(for note: Note) -> String {
         guard let ctx = keyContext else { return note.description }
         return note.spelled(inKey: ctx.root, asMinor: ctx.isMinor)
+    }
+
+    /// The custom label for `position` if there is one, else its note name.
+    private func label(for position: FretboardPosition) -> String {
+        customLabels[position] ?? label(for: position.note)
     }
 
     // ── Layout constants ──────────────────────────────────────────────────
@@ -118,7 +127,7 @@ struct FretboardView: View {
                                     .shadow(color: fill.opacity(0.45), radius: 6)
 
                                 if showHighlightedLabels {
-                                    Text(label(for: openPos.note))
+                                    Text(label(for: openPos))
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(.white)
                                 }
@@ -268,7 +277,7 @@ struct FretboardView: View {
                             radius: 6)
 
                 if showNoteLabels && !isHighlighted && !isCorrect && !isSelected {
-                    Text(label(for: pos.note))
+                    Text(label(for: pos))
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.primary)
                 }
@@ -276,7 +285,7 @@ struct FretboardView: View {
                 if (isHighlighted || isCorrect) && showHighlightedLabels {
                     let showLabel: Bool = isCorrect || (highlightedPositions.isEmpty ? answerResult != nil : true)
                     if showLabel {
-                        Text(label(for: pos.note))
+                        Text(label(for: pos))
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.white)
                     }
