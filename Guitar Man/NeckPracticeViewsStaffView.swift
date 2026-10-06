@@ -36,6 +36,17 @@ struct StaffView: View {
     /// Distance between two staff lines; everything else scales from it.
     var lineSpacing: CGFloat = 10
 
+    /// Width of the clef, key signature, and time signature, for laying a staff out from pieces
+    /// (a header followed by one StaffView per slot, as the Composition screen does).
+    static func headerWidth(keySignature: KeySignature, showsClef: Bool = true,
+                            beatsPerMeasure: Int? = nil, lineSpacing s: CGFloat) -> CGFloat {
+        var width = s * 0.4
+        if showsClef { width += s * 3.0 }
+        if keySignature.fifths != 0 { width += CGFloat(abs(keySignature.fifths)) * s * 0.85 + s * 0.4 }
+        if beatsPerMeasure != nil { width += s * 2.4 }
+        return width + s * 0.4
+    }
+
     var body: some View {
         Canvas { context, size in
             draw(in: &context, size: size)

@@ -73,6 +73,13 @@ extension ExerciseItem {
             color: .indigo,
             isAvailable: true
         ),
+        ExerciseItem(
+            title: "Compose",
+            subtitle: "Build chord progressions with Roman numerals, then play them",
+            icon: "music.note.house.fill",
+            color: .brown,
+            isAvailable: true
+        ),
     ]
 }
 
@@ -305,6 +312,7 @@ struct HomeView: View {
         case "Roman Numerals":     RomanNumeralView()
         case "Interval Trainer":    IntervalView()
         case "Mode Quiz":           ModeQuizView()
+        case "Compose":             CompositionListView()
         default:                    EmptyView()
         }
     }
