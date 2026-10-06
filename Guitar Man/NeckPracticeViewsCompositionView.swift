@@ -309,9 +309,11 @@ struct CompositionStaffView: View {
                                      endsMeasure: beat == composition.slotsPerMeasure - 1)
                         }
                     }
-                    // A short last line keeps measures the same width as full ones.
+                    // A short last line keeps its measure the same width as on a full line.
                     if first + measuresPerLine > composition.measureCount {
-                        Color.clear.frame(maxWidth: .infinity)
+                        ForEach(0..<composition.slotsPerMeasure, id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity)
+                        }
                     }
                 }
                 .frame(height: 120)
