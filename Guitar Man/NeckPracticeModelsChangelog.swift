@@ -36,6 +36,21 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.2",
+            released: "October 2026",
+            releasedOn: DateComponents(year: 2026, month: 10, day: 6),
+            items: [
+                ChangelogItem(symbol: "music.note.house", title: "Compose",
+                              detail: "Drag Roman numerals onto a staff to write your own chord progressions in any key, save them, and play them while the app listens and marks each chord."),
+                ChangelogItem(symbol: "arrow.up.and.down", title: "Interval Trainer",
+                              detail: "Name the interval on the staff in any key, then find it on the neck. Bonus rounds on inversions and compound intervals."),
+                ChangelogItem(symbol: "circle.hexagongrid", title: "Modes",
+                              detail: "A Modes reference: what each mode is, how it differs from major or minor, and how to play it. Plus a Mode Quiz."),
+                ChangelogItem(symbol: "music.note.list", title: "Triads on the staff",
+                              detail: "The Triad Trainer now writes every shape's notes on the staff, too."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.1",
             released: "October 2026",
             releasedOn: DateComponents(year: 2026, month: 10, day: 4),

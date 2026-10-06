@@ -11,6 +11,8 @@ Source files keep their `NeckPractice*` prefix, and the Xcode project, target, a
   - `NeckPracticeServices*.swift` — audio, pitch detection, metronome, looper, notifications
   - `NeckPracticeViews*.swift` — SwiftUI screens
   Follow this naming for new files.
+- Staff notation: `NeckPracticeModelsNotation.swift` (`SpelledPitch`, `KeySignature`, `Interval`, `NoteValue`) and `NeckPracticeViewsStaffView.swift` (shared treble staff in guitar notation, written an octave above concert). Use these for anything shown on a staff; spell notes by letter, not `Note` (which can't tell F♯ from G♭).
+- `scripts/*-check.swift` — offline logic checks (theory, tuner, metronome, looper library, chords). Each file's header has the `swiftc` command; model/analyzer files they compile must stay free of SwiftUI/UIKit.
 - Screen Time ("Block apps until I practice") — needs the Family Controls entitlement and the App Group `group.test.Guitar-Man`:
   - `DeviceActivityMonitor/`, `ShieldConfiguration/`, `ShieldAction/` — one extension target each (`test.Guitar-Man.<Name>`), embedded in the app. Each folder holds its Swift file, `Info.plist` (excluded from the target's sources), and `.entitlements`.
   - `ScreenTimeShared/ScreenTimeShared.swift` — compiled into the app **and** all three extensions: App Group state, shield apply/clear, the 15-min unlock (2/day). Keep it plain, `nonisolated` code (the app target defaults to MainActor, the extensions don't). `appName` there is the name shown on the shield.
