@@ -6,6 +6,7 @@
 //  Step 1 — Identify the quality (Major / Minor)
 //  Step 2 — Identify the inversion (Root / 1st / 2nd)
 //  Step 3 — Name the root note
+//  The shape's notes are also written on a staff under the neck, lowest first.
 //
 
 import SwiftUI
@@ -98,6 +99,15 @@ struct TriadView: View {
                     )
                     .frame(height: 260)
                     .padding(.horizontal, 8)
+
+                    // ── The same notes on the staff ──────────────────────────
+                    let pitches = q.spelledPitches
+                    StaffView(columns: [
+                        StaffColumn(id: 0, pitches: pitches,
+                                    below: pitches.map(\.name).joined(separator: "  "))
+                    ], lineSpacing: 8)
+                    .frame(height: 104)
+                    .padding(.horizontal, 24)
                 }
 
                 Divider()

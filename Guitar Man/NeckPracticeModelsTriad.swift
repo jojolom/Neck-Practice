@@ -148,4 +148,15 @@ struct TriadQuestion {
     var maxFret: Int {
         baseFret + (shape.fretOffsets.max() ?? 0)
     }
+
+    /// The three notes as written, lowest first, spelled as the chord: a first-inversion
+    /// G major is B–D–G, a D♭ major has an F and an A♭ (not E♯ and G♯).
+    var spelledPitches: [SpelledPitch] {
+        let rootLetter = rootNote.keyLetterInfo(asMinor: shape.quality == .minor).letterIndex
+        return triadPositions.sorted { $0.midiNote < $1.midiNote }.compactMap { position in
+            let fromRoot = (position.note.rawValue - rootNote.rawValue + 12) % 12
+            let letterSteps = fromRoot == 0 ? 0 : (fromRoot == 7 ? 4 : 2)   // root, 5th, or 3rd
+            return SpelledPitch(midi: position.midiNote, letter: (rootLetter + letterSteps) % 7)
+        }
+    }
 }
