@@ -142,14 +142,14 @@ struct KeySignature: Hashable, Codable {
     /// The signature of the major key on this tonic, or nil if it would need more than 7 accidentals
     /// (G♯ major, for one).
     static func major(letter: Int, accidental: Int) -> KeySignature? {
-        (-7...7).map(KeySignature.init(fifths:)).first {
+        (-7...7).map { KeySignature(fifths: $0) }.first {
             $0.majorTonic.letter == letter && $0.majorTonic.accidental == accidental
         }
     }
 
     /// The signature of the natural-minor key on this tonic, or nil past 7 accidentals.
     static func minor(letter: Int, accidental: Int) -> KeySignature? {
-        (-7...7).map(KeySignature.init(fifths:)).first {
+        (-7...7).map { KeySignature(fifths: $0) }.first {
             $0.minorTonic.letter == letter && $0.minorTonic.accidental == accidental
         }
     }
