@@ -109,12 +109,13 @@ struct CompositionPlayAlongView: View {
                     .foregroundStyle(.secondary)
             } else if isFinished {
                 let heard = results.values.filter { $0 }.count
-                Image(systemName: "checkmark.seal.fill")
+                let allHeard = heard == chordSlots.count
+                Image(systemName: allHeard ? "checkmark.seal.fill" : "forward.circle.fill")
                     .font(.system(size: 44))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(allHeard ? .green : .orange)
                 Text("\(heard) of \(chordSlots.count) chords")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                Text(heard == chordSlots.count ? "Every chord, clean. Nice." : "Orange ones were skipped. Try them again?")
+                Text(allHeard ? "Every chord, clean. Nice." : "Orange ones were skipped. Try them again?")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if let chord = currentChord {
