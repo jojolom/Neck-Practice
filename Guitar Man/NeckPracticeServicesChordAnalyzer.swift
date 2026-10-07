@@ -61,12 +61,16 @@ enum ChordAnalyzer {
     }
 
     /// Whether `chroma` sounds like the chord made of `pitchClasses`: at least half the sound is
-    /// on chord notes, and every chord note is clearly present (a quarter of the loudest one).
-    /// That's what tells C (C E G) from Am (A C E): an A minor strum has a strong A, a C doesn't.
+    /// on chord notes, every chord note is clearly present (a quarter of the loudest one), and no
+    /// other note comes close to the loudest. That's what tells C (C E G) from Am (A C E): an A minor
+    /// strum has a strong A, a C doesn't. And B° (B D F) from Dm (D F A): overtones of D and F put
+    /// a little A in a B° strum, but it also has a loud B. (Overtones alone stay under half.)
     static func matches(chroma: [Double], pitchClasses: Set<Int>) -> Bool {
         guard chroma.count == 12, let peak = chroma.max(), peak > 0, !pitchClasses.isEmpty else { return false }
-        let inChord = pitchClasses.reduce(0.0) { $0 + chroma[(($1 % 12) + 12) % 12] }
-        let everyNote = pitchClasses.allSatisfy { chroma[(($0 % 12) + 12) % 12] >= 0.25 * peak }
-        return inChord >= 0.5 && everyNote
+        let classes = Set(pitchClasses.map { (($0 % 12) + 12) % 12 })
+        let inChord = classes.reduce(0.0) { $0 + chroma[$1] }
+        let everyNote = classes.allSatisfy { chroma[$0] >= 0.25 * peak }
+        let noLoudOthers = (0..<12).allSatisfy { classes.contains($0) || chroma[$0] < 0.7 * peak }
+        return inChord >= 0.5 && everyNote && noLoudOthers
     }
 }
