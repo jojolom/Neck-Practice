@@ -23,9 +23,6 @@ final class TriadSession {
     /// Shapes will be placed so that all frets fall within 1...maxFret
     var maxFret: Int = 9
 
-    /// Number of root-note answer choices shown (4 to 12).
-    var rootChoiceCount: Int = 4
-
     // MARK: - State
 
     private(set) var currentQuestion: TriadQuestion?

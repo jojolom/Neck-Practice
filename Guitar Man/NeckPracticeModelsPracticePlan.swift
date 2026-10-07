@@ -130,10 +130,9 @@ struct TriadStepConfig: Codable, Hashable {
     var qualityFilter: TriadQuality? = nil
     var stringGroupFilter: StringGroup? = nil
     var maxFret: Int? = nil
-    var rootChoiceCount: Int? = nil
 
     var hasOverrides: Bool {
-        qualityFilter != nil || stringGroupFilter != nil || maxFret != nil || rootChoiceCount != nil
+        qualityFilter != nil || stringGroupFilter != nil || maxFret != nil
     }
 }
 
@@ -228,7 +227,6 @@ extension TriadSession {
         if let v = override.qualityFilter { qualityFilter = v }
         if let v = override.stringGroupFilter { stringGroupFilter = v }
         if let v = override.maxFret { maxFret = v }
-        if let v = override.rootChoiceCount { rootChoiceCount = v }
     }
 }
 

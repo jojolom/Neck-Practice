@@ -167,11 +167,6 @@ struct PracticeStepCustomizeView: View {
                         defaultValue: 9) { binding in
                 Stepper("\(binding.wrappedValue) frets", value: binding, in: 5...12)
             }
-            overrideRow(label: "Root Choices",
-                        value: $draft.config.triad.rootChoiceCount,
-                        defaultValue: 4) { binding in
-                Stepper("\(binding.wrappedValue) choices", value: binding, in: 4...12)
-            }
         }
     }
 

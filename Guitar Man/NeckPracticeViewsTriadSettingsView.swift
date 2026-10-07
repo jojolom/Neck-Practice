@@ -66,16 +66,6 @@ struct TriadSettingsView: View {
                 }
 
                 Section {
-                    Stepper("Root Choices: \(session.rootChoiceCount)",
-                            value: $session.rootChoiceCount,
-                            in: 4...12)
-                } header: {
-                    Text("Difficulty")
-                } footer: {
-                    Text("Fewer choices makes identifying the root note easier.")
-                }
-
-                Section {
                     @Bindable var audio = audioSettings
                     Toggle("Sound", isOn: $audio.isEnabled)
                 } header: {

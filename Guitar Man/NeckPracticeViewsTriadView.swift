@@ -5,7 +5,7 @@
 //  Three-step exercise:
 //  Step 1 — Identify the quality (Major / Minor)
 //  Step 2 — Identify the inversion (Root / 1st / 2nd)
-//  Step 3 — Name the root note
+//  Step 3 — Name the root note: which of the shape's three notes it is
 //  The shape's notes are also written on a staff under the neck, lowest first.
 //
 
@@ -47,15 +47,15 @@ struct TriadView: View {
     @State private var correctRoot: Note? = nil
     /// The wrong root note tapped by the user, to highlight it red.
     @State private var wrongRoot: Note? = nil
-    /// Sorted, subset root-note choices.
-    @State private var rootChoices: [Note] = []
+    /// The shape's three notes, lowest first and spelled as on the staff: one of them is the root.
+    @State private var rootChoices: [SpelledPitch] = []
     /// True during the "new question just appeared" lock period so the chord can be heard first.
     @State private var isNewQuestionLocked = false
 
     @Environment(AudioSettings.self) private var audioSettings
 
     var body: some View {
-        NavigationStack {
+        NavigationContainer {
             VStack(spacing: 0) {
 
                 // ── Stats bar ────────────────────────────────────────────
@@ -258,15 +258,14 @@ struct TriadView: View {
             }
 
         case .root:
-            let isMinorQ = session.currentQuestion?.shape.quality == .minor
             HStack(spacing: 8) {
-                ForEach(rootChoices) { note in
-                    let isCorrect = correctRoot == note
-                    let isWrong   = wrongRoot == note
+                ForEach(rootChoices, id: \.self) { pitch in
+                    let isCorrect = correctRoot == pitch.note
+                    let isWrong   = wrongRoot == pitch.note
                     Button {
-                        handleRootAnswer(note)
+                        handleRootAnswer(pitch.note)
                     } label: {
-                        Text(note.keyName(asMinor: isMinorQ))
+                        Text(pitch.name)
                             .font(.system(size: 17, weight: .semibold, design: .rounded))
                             .foregroundStyle((isCorrect || isWrong) ? .white : .primary)
                             .frame(maxWidth: .infinity)
@@ -408,15 +407,9 @@ struct TriadView: View {
         }
     }
 
+    /// The root is one of the three notes on screen; the question is which.
     private func refreshRootChoices() {
-        guard let q = session.currentQuestion else {
-            rootChoices = Array(Note.allCases.prefix(session.rootChoiceCount))
-            return
-        }
-        let correct = q.rootNote
-        let count = min(session.rootChoiceCount, Note.allCases.count)
-        let distractors = Array(correct.circleOfFifthsDistractors().prefix(count - 1))
-        rootChoices = ([correct] + distractors).sorted { $0.rawValue < $1.rawValue }
+        rootChoices = session.currentQuestion?.spelledPitches ?? []
     }
 
     private func resetSession() {
