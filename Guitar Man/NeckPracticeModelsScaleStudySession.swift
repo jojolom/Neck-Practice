@@ -5,6 +5,8 @@
 //  Manages the 4-scale study cycle: start → relative → parallel → relative.
 //  Strings follow a 6-5-5-6 or 5-6-6-5 pattern (X, Y, Y, X): the relative moves to
 //  the opposite string, the parallel stays on the same string as the scale before it.
+//  Keys are chosen so every scale's root sits between frets 2 and 12 on its string (no
+//  open-string positions). Tempos keep every rhythm at or under 3 notes a second.
 //  Integrates rhythm assignment, BPM selection, and theory quizzing.
 //
 
@@ -56,14 +58,30 @@ enum Rhythm: CaseIterable, Codable {
         }
     }
 
-    /// BPM range that keeps effective note speed reasonable.
+    /// Notes played per beat.
+    var notesPerBeat: Int {
+        switch self {
+        case .quarter:   return 1
+        case .eighth:    return 2
+        case .triplet:   return 3
+        case .sixteenth: return 4
+        }
+    }
+
+    /// BPM range for this rhythm: the top of each keeps you at or under 3 notes a second
+    /// (quarters stop at 2, since 180 BPM quarters would be a different exercise).
     var bpmRange: ClosedRange<Int> {
         switch self {
-        case .quarter:   return 80...130
-        case .eighth:    return 65...100
-        case .triplet:   return 70...110
-        case .sixteenth: return 45...65
+        case .quarter:   return 60...120
+        case .eighth:    return 50...90
+        case .triplet:   return 40...60
+        case .sixteenth: return 40...45
         }
+    }
+
+    /// `bpm` moved into this rhythm's range, on a multiple of 5.
+    func clamped(_ bpm: Int) -> Int {
+        (max(bpmRange.lowerBound, min(bpmRange.upperBound, bpm)) / 5) * 5
     }
 
     /// Random BPM within the appropriate range, rounded to nearest 5.
@@ -82,19 +100,25 @@ struct ScaleEntry: Identifiable {
     /// Which string to play this scale on: 5 (A string) or 6 (low E).
     let string: Int
 
+    /// Lowest and highest fret a scale's root may sit on: no open-string positions.
+    static let fretRange = 2...12
+
+    /// The fret the root is played at on `string`: an open-string root (fret 0) is played at
+    /// the 12th fret instead.
+    var rootFret: Int { Self.rootFret(of: root, onString: string) }
+
+    static func rootFret(of root: Note, onString string: Int) -> Int {
+        let fret = string == 6 ? fretOnLowE(for: root) : fretOnAString(for: root)
+        return fret == 0 ? 12 : fret
+    }
+
     var qualityLabel: String { isMajor ? "Major" : "Minor" }
     /// Key name with conventional spelling, e.g. "Bb Major" rather than "A# Major".
     var fullLabel: String { "\(root.keyName(asMinor: !isMajor)) \(qualityLabel)" }
 
     /// Fret info for where to start on the assigned string.
     var rootFretInfo: String {
-        if string == 6 {
-            let fret = fretOnLowE(for: root)
-            return fret == 0 ? "6th string · open" : "6th string · fret \(fret)"
-        } else {
-            let fret = fretOnAString(for: root)
-            return fret == 0 ? "5th string · open" : "5th string · fret \(fret)"
-        }
+        "\(string == 6 ? "6th" : "5th") string · fret \(rootFret)"
     }
 }
 
@@ -120,14 +144,19 @@ final class ScaleStudySession {
     var rhythmMode: RhythmMode = .random
 
     var fixedRhythm: Rhythm = .quarter {
+        didSet { fixedBPM = fixedRhythm.clamped(fixedBPM) }
+    }
+
+    /// Always within `fixedRhythm`'s range (a Daily Practice override can ask for anything).
+    var fixedBPM: Int = 100 {
         didSet {
-            let range = fixedRhythm.bpmRange
-            fixedBPM = max(range.lowerBound, min(range.upperBound, fixedBPM))
-            fixedBPM = (fixedBPM / 5) * 5
+            let clamped = fixedRhythm.clamped(fixedBPM)
+            if clamped != fixedBPM { fixedBPM = clamped }
         }
     }
 
-    var fixedBPM: Int = 100
+    /// Also click each note of the rhythm (quietly) between the beats.
+    var clickSubdivisions = false
     var enabledRhythms: Set<Rhythm> = Set(Rhythm.allCases)
 
     // MARK: - Score
@@ -205,54 +234,22 @@ final class ScaleStudySession {
     // MARK: - Round Generation
 
     private func generateRound() {
-        let startRoot = Note.allCases.randomElement()!
-        let startMajor = Bool.random()
-
-        // String pattern X, Y, Y, X (6556 or 5665); X is random each round.
-        let x = Bool.random() ? 6 : 5
-        let y = x == 6 ? 5 : 6
-
-        var entries: [ScaleEntry] = []
-
-        // Scale 1: Starting scale
-        entries.append(ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale", string: x))
-
-        // Scale 2: Relative of #1
-        let prev1 = entries[0]
-        let rel1Root: Note
-        let rel1Major: Bool
-        let rel1Label: String
-        if prev1.isMajor {
-            rel1Root = prev1.root.relativeMinor
-            rel1Major = false
-            rel1Label = "Relative Minor"
-        } else {
-            rel1Root = prev1.root.relativeMajor
-            rel1Major = true
-            rel1Label = "Relative Major"
+        // Every starting key, quality and string pattern whose four scales all have their
+        // roots within the fret range; pick one at random.
+        var candidates: [[ScaleEntry]] = []
+        for root in Note.allCases {
+            for isMajor in [true, false] {
+                for x in [6, 5] {
+                    let chain = Self.chain(startRoot: root, startMajor: isMajor, startString: x)
+                    if chain.allSatisfy({ ScaleEntry.fretRange.contains($0.rootFret) }) {
+                        candidates.append(chain)
+                    }
+                }
+            }
         }
-        entries.append(ScaleEntry(root: rel1Root, isMajor: rel1Major, relationship: rel1Label, string: y))
-
-        // Scale 3: Parallel of #2 — stays on the same string as #2
-        let prev2 = entries[1]
-        let par2Label = prev2.isMajor ? "Parallel Minor" : "Parallel Major"
-        entries.append(ScaleEntry(root: prev2.root, isMajor: !prev2.isMajor, relationship: par2Label, string: y))
-
-        // Scale 4: Relative of #3
-        let prev3 = entries[2]
-        let rel3Root: Note
-        let rel3Major: Bool
-        let rel3Label: String
-        if prev3.isMajor {
-            rel3Root = prev3.root.relativeMinor
-            rel3Major = false
-            rel3Label = "Relative Minor"
-        } else {
-            rel3Root = prev3.root.relativeMajor
-            rel3Major = true
-            rel3Label = "Relative Major"
-        }
-        entries.append(ScaleEntry(root: rel3Root, isMajor: rel3Major, relationship: rel3Label, string: x))
+        let entries = candidates.randomElement()
+            ?? Self.chain(startRoot: .c, startMajor: true, startString: 5)
+        let x = entries[0].string, y = entries[1].string
 
         #if DEBUG
         assert(entries.map(\.string) == [x, y, y, x], "String pattern must be X, Y, Y, X")
@@ -264,5 +261,21 @@ final class ScaleStudySession {
         #endif
 
         round = entries
+    }
+
+    /// Starting scale → its relative → that one's parallel → that one's relative, on strings
+    /// X, Y, Y, X.
+    static func chain(startRoot: Note, startMajor: Bool, startString x: Int) -> [ScaleEntry] {
+        let y = x == 6 ? 5 : 6
+        func relative(of scale: ScaleEntry, string: Int) -> ScaleEntry {
+            scale.isMajor
+                ? ScaleEntry(root: scale.root.relativeMinor, isMajor: false, relationship: "Relative Minor", string: string)
+                : ScaleEntry(root: scale.root.relativeMajor, isMajor: true, relationship: "Relative Major", string: string)
+        }
+        let first = ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale", string: x)
+        let second = relative(of: first, string: y)
+        let third = ScaleEntry(root: second.root, isMajor: !second.isMajor,
+                               relationship: second.isMajor ? "Parallel Minor" : "Parallel Major", string: y)
+        return [first, second, third, relative(of: third, string: x)]
     }
 }

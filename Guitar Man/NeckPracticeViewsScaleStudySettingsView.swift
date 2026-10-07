@@ -36,6 +36,14 @@ struct ScaleStudySettingsView: View {
                 } else {
                     randomModeSection
                 }
+
+                Section {
+                    Toggle("Click Every Note", isOn: $session.clickSubdivisions)
+                } header: {
+                    Text("Metronome")
+                } footer: {
+                    Text("Adds a quiet click on each eighth, triplet, or sixteenth between the beats.")
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

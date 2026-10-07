@@ -32,6 +32,10 @@ final class Metronome {
     /// Beats per measure for visual accent. Default 4 (common time).
     var beatsPerMeasure: Int = 4
 
+    /// Clicks per beat: 1 for beats only; 2, 3 or 4 adds a quiet click on each eighth, triplet
+    /// or sixteenth. Takes effect the next time the metronome starts.
+    var subdivisions: Int = 1
+
     // MARK: - State
 
     private(set) var isPlaying: Bool = false
@@ -49,6 +53,7 @@ final class Metronome {
     private let sampleRate: Double = 44100
     private var clickBuffer: AVAudioPCMBuffer?
     private var accentBuffer: AVAudioPCMBuffer?
+    private var subdivisionBuffer: AVAudioPCMBuffer?
 
     // MARK: - Scheduling
 
@@ -83,11 +88,12 @@ final class Metronome {
 
         clickBuffer = generateClick(frequency: 800, duration: 0.03, sampleRate: sampleRate)
         accentBuffer = generateClick(frequency: 1200, duration: 0.04, sampleRate: sampleRate)
+        subdivisionBuffer = generateClick(frequency: 1000, duration: 0.02, sampleRate: sampleRate, gain: 0.3)
     }
 
     /// Generates a short sine-wave click with fast exponential decay.
     private func generateClick(frequency: Double, duration: Double,
-                                sampleRate: Double) -> AVAudioPCMBuffer? {
+                                sampleRate: Double, gain: Float = 1) -> AVAudioPCMBuffer? {
         let frameCount = AVAudioFrameCount(sampleRate * duration)
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
@@ -98,7 +104,7 @@ final class Metronome {
         for i in 0..<Int(frameCount) {
             let t = Double(i) / sampleRate
             let envelope = Float(exp(-t * 80))
-            data[i] = envelope * sin(Float(2.0 * .pi * frequency * t))
+            data[i] = gain * envelope * sin(Float(2.0 * .pi * frequency * t))
         }
         return buffer
     }
@@ -118,7 +124,7 @@ final class Metronome {
         }
 
         outputLatencyFrames = Int64(AVAudioSession.sharedInstance().outputLatency * sampleRate)
-        schedule = BeatSchedule(bpm: bpm, beatsPerMeasure: beatsPerMeasure,
+        schedule = BeatSchedule(bpm: bpm, beatsPerMeasure: beatsPerMeasure, subdivisions: subdivisions,
                                 sampleRate: sampleRate, firstBeatAt: lead * sampleRate)
         pendingBeats = []
         currentBeat = 0
@@ -161,7 +167,8 @@ final class Metronome {
     private func queueClicks(from now: Int64) {
         guard var schedule else { return }
         for beat in schedule.beats(through: now + Int64(lookahead * sampleRate)) {
-            if let buffer = beat.index == 0 ? accentBuffer : clickBuffer {
+            let buffer = beat.subdivision > 0 ? subdivisionBuffer : beat.index == 0 ? accentBuffer : clickBuffer
+            if let buffer {
                 playerNode.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: beat.sampleTime, atRate: sampleRate),
                                           options: [], completionHandler: nil)
             }
@@ -201,6 +208,7 @@ final class Metronome {
         let heard = now - outputLatencyFrames
         while let beat = pendingBeats.first, beat.sampleTime <= heard {
             pendingBeats.removeFirst()
+            guard beat.subdivision == 0 else { continue }  // the lights follow the beats only
             currentBeat = beat.index
             beatPulse.toggle()
         }

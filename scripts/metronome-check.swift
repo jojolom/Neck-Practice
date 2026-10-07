@@ -4,6 +4,8 @@
 //  Offline check for the metronome's timing (BeatSchedule):
 //   • beat positions never drift (10 minutes at awkward tempos land on the exact sample),
 //   • a tempo change takes effect one new beat after the last scheduled click, never in the past,
+//   • subdivision clicks (eighths, triplets, sixteenths) fall evenly between the beats, on the
+//     same beat positions as without them, and keep that through a tempo change,
 //   • an AVAudioEngine rendered offline, fed the way Metronome feeds it (clicks queued 0.2 s ahead
 //     from a coarse timer), plays every click on its exact sample, through a tempo change.
 //     The render is paced to 40× real time: AVAudioPlayerNode takes in a scheduled buffer on
@@ -34,6 +36,7 @@ struct MetronomeCheck {
     static func main() {
         checkNoDrift()
         checkTempoChange()
+        checkSubdivisions()
         checkRenderedClicks()
         print(failures == 0 ? "0 failures" : "\(failures) failures")
         exit(failures == 0 ? 0 : 1)
@@ -76,6 +79,35 @@ struct MetronomeCheck {
     }
 
     /// Renders 16 s with an offline engine, scheduling the way Metronome does, and finds the clicks.
+    static func checkSubdivisions() {
+        for subdivisions in 2...4 {
+            var plain = BeatSchedule(bpm: 97, beatsPerMeasure: 4, sampleRate: rate, firstBeatAt: 0)
+            var divided = BeatSchedule(bpm: 97, beatsPerMeasure: 4, subdivisions: subdivisions,
+                                       sampleRate: rate, firstBeatAt: 0)
+            let horizon = Int64(60 * rate)
+            let beats = plain.beats(through: horizon)
+            let clicks = divided.beats(through: horizon)
+            let onBeat = clicks.filter { $0.subdivision == 0 }
+            check(onBeat == beats, "\(subdivisions) per beat: the beat clicks are where they'd be without subdivisions")
+            check(clicks.count >= beats.count * subdivisions - subdivisions + 1,
+                  "\(subdivisions) per beat: \(clicks.count) clicks for \(beats.count) beats")
+            check(clicks.map(\.subdivision) == clicks.indices.map { $0 % subdivisions },
+                  "\(subdivisions) per beat: subdivisions count 0..<\(subdivisions) within each beat")
+            let spacing = 60 / 97.0 * rate / Double(subdivisions)
+            let even = zip(clicks.dropFirst(), clicks).allSatisfy { abs(Double($0.sampleTime - $1.sampleTime) - spacing) <= 1 }
+            check(even, "\(subdivisions) per beat: clicks evenly spaced")
+        }
+        // Tempo change mid-beat: the remaining subdivisions continue at the new spacing.
+        var schedule = BeatSchedule(bpm: 60, beatsPerMeasure: 4, subdivisions: 4, sampleRate: rate, firstBeatAt: 0)
+        let before = schedule.beats(through: Int64(1.3 * rate))
+        schedule.setBPM(120, earliest: 0)
+        let after = schedule.beats(through: Int64(3 * rate))
+        let gap = Double(after[0].sampleTime - before.last!.sampleTime)
+        check(abs(gap - 0.125 * rate) <= 1 && after[0].subdivision == (before.last!.subdivision + 1) % 4,
+              "tempo change keeps subdividing: next click \(gap / rate) s later, subdivision \(after[0].subdivision)")
+        print("ok   subdivisions: evenly between the beats, beats unmoved, through a tempo change")
+    }
+
     static func checkRenderedClicks() {
         let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
         let engine = AVAudioEngine()

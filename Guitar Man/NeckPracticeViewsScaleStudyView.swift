@@ -361,6 +361,7 @@ struct ScaleStudyView: View {
 
     private func startMetronome() {
         metronome.bpm = session.bpm
+        metronome.subdivisions = session.clickSubdivisions ? session.rhythm.notesPerBeat : 1
         metronome.start()
     }
 }

@@ -231,10 +231,11 @@ struct PracticeStepCustomizeView: View {
                 }
                 .pickerStyle(.menu)
             }
+            let range = (draft.config.scaleStudy.fixedRhythm ?? .quarter).bpmRange
             overrideRow(label: "Fixed BPM",
                         value: $draft.config.scaleStudy.fixedBPM,
                         defaultValue: 100) { binding in
-                Stepper("\(binding.wrappedValue) BPM", value: binding, in: 40...200, step: 5)
+                Stepper("\(binding.wrappedValue) BPM", value: binding, in: range, step: 5)
             }
         }
     }
