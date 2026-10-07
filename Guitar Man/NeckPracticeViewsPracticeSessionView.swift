@@ -51,7 +51,8 @@ struct PracticeSessionView: View {
 
                 Divider()
 
-                // Embed the current step's trainer view full-bleed.
+                // Embed the current step's trainer view full-bleed, in a stack of its own (it's
+                // content here, not a pushed screen; see NavigationContainer).
                 Group {
                     if let step = currentStep {
                         stepContent(for: step.kind)
@@ -59,6 +60,7 @@ struct PracticeSessionView: View {
                         finishedView
                     }
                 }
+                .environment(\.providesNavigationStack, false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationBarTitleDisplayMode(.inline)

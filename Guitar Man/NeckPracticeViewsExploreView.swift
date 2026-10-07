@@ -16,7 +16,7 @@ struct ExploreView: View {
     private let maxFret = 22
 
     var body: some View {
-        NavigationStack {
+        NavigationContainer {
             VStack(spacing: 0) {
 
                 // ── Fretboard ───────────────────────────────────────────────

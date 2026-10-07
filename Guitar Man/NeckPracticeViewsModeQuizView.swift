@@ -26,7 +26,7 @@ struct ModeQuizView: View {
     @Environment(AudioSettings.self) private var audioSettings
 
     var body: some View {
-        NavigationStack {
+        NavigationContainer {
             ScrollView {
                 VStack(spacing: 0) {
                     HStack(spacing: 24) {

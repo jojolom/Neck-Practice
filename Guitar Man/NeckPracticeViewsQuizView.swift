@@ -29,7 +29,7 @@ struct QuizView: View {
     @Environment(AudioSettings.self) private var audioSettings
 
     var body: some View {
-        NavigationStack {
+        NavigationContainer {
             VStack(spacing: 0) {
 
                 // ── Stats bar ───────────────────────────────────────────────

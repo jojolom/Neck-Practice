@@ -20,7 +20,7 @@ struct ScaleStudyView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationContainer {
             Group {
                 switch session.phase {
                 case .setup:         setupPhase

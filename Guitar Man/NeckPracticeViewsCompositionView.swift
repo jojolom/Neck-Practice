@@ -16,14 +16,19 @@ import SwiftUI
 
 struct CompositionListView: View {
 
+    /// The editor, for a new composition or a saved one (by id). Pushed through the enclosing
+    /// stack's path, like everything else on Home's stack.
+    private enum Route: Hashable {
+        case new
+        case saved(UUID)
+    }
+
     @State private var store = CompositionStore()
 
     var body: some View {
         List {
             Section {
-                NavigationLink {
-                    CompositionEditorView(composition: Composition(), store: store)
-                } label: {
+                NavigationLink(value: Route.new) {
                     Label("New Composition", systemImage: "plus.circle.fill")
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                 }
@@ -34,9 +39,7 @@ struct CompositionListView: View {
             if !store.compositions.isEmpty {
                 Section("Saved") {
                     ForEach(store.compositions) { composition in
-                        NavigationLink {
-                            CompositionEditorView(composition: composition, store: store)
-                        } label: {
+                        NavigationLink(value: Route.saved(composition.id)) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(composition.name)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
@@ -54,6 +57,16 @@ struct CompositionListView: View {
             }
         }
         .navigationTitle("Compose")
+        .navigationDestination(for: Route.self) { route in
+            switch route {
+            case .new:
+                CompositionEditorView(composition: Composition(), store: store)
+            case .saved(let id):
+                if let composition = store.compositions.first(where: { $0.id == id }) {
+                    CompositionEditorView(composition: composition, store: store)
+                }
+            }
+        }
     }
 
     private func summary(of composition: Composition) -> String {

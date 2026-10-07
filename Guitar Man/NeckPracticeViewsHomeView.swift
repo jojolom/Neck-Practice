@@ -85,16 +85,28 @@ extension ExerciseItem {
 
 // MARK: - HomeView
 
-/// Screens HomeView can be sent to from outside (notification taps).
+/// Every screen HomeView opens, pushed through the stack's path (which also lets a reminder
+/// tap open Daily Practice). Screens pushed from here use Home's stack rather than their own:
+/// see NavigationContainer.
 private enum HomeRoute: Hashable {
     case dailyPractice
+    /// An exercise card, by its title.
+    case exercise(String)
+    case tool(Tool)
+}
+
+/// The Tools and References rows.
+private enum Tool: Hashable {
+    case tuner, metronome, looper
+    case circleOfFifths, scaleReference, modes, pentatonicShapes, romanNumerals, explorer
 }
 
 struct HomeView: View {
 
     private let router = DeepLinkRouter.shared
 
-    @State private var path: [HomeRoute] = []
+    /// Untyped, since screens pushed from Home add their own routes (Compose's editor).
+    @State private var path = NavigationPath()
     @State private var whatsNew: ChangelogEntry?
     @State private var showAbout = false
     @State private var showTools = true
@@ -117,7 +129,7 @@ struct HomeView: View {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(ExerciseItem.all, id: \.title) { item in
                         if item.isAvailable {
-                            NavigationLink(destination: destination(for: item)) {
+                            NavigationLink(value: HomeRoute.exercise(item.title)) {
                                 ExerciseCard(item: item)
                             }
                             .buttonStyle(.plain)
@@ -148,15 +160,15 @@ struct HomeView: View {
 
                     if showTools {
                         VStack(spacing: 10) {
-                            toolLink(destination: TunerView(),
+                            toolLink(.tuner,
                                      title: "Tuner", icon: "tuningfork", color: .green)
                                 .transition(toolTransition)
 
-                            toolLink(destination: MetronomeView(),
+                            toolLink(.metronome,
                                      title: "Metronome", icon: "metronome.fill", color: .red)
                                 .transition(toolTransition)
 
-                            toolLink(destination: LooperView(),
+                            toolLink(.looper,
                                      title: "Audio Looper", icon: "waveform.circle", color: .orange)
                                 .transition(toolTransition)
                         }
@@ -184,27 +196,27 @@ struct HomeView: View {
 
                     if showReferences {
                         VStack(spacing: 10) {
-                            toolLink(destination: CircleOfFifthsView(),
+                            toolLink(.circleOfFifths,
                                      title: "Circle of Fifths", icon: "circle.circle", color: .indigo)
                                 .transition(toolTransition)
 
-                            toolLink(destination: ScaleReferenceView(),
+                            toolLink(.scaleReference,
                                      title: "Scale Reference", icon: "music.note", color: .teal)
                                 .transition(toolTransition)
 
-                            toolLink(destination: ModeReferenceView(),
+                            toolLink(.modes,
                                      title: "Modes", icon: "circle.hexagongrid", color: .indigo)
                                 .transition(toolTransition)
 
-                            toolLink(destination: PentatonicReferenceView(),
+                            toolLink(.pentatonicShapes,
                                      title: "Pentatonic Shapes", icon: "square.grid.3x3", color: .orange)
                                 .transition(toolTransition)
 
-                            toolLink(destination: RomanNumeralReferenceView(),
+                            toolLink(.romanNumerals,
                                      title: "Roman Numerals", icon: "number.circle", color: .pink)
                                 .transition(toolTransition)
 
-                            toolLink(destination: ExploreView(),
+                            toolLink(.explorer,
                                      title: "Fretboard Explorer", icon: "guitars.fill", color: .blue)
                                 .transition(toolTransition)
                         }
@@ -243,16 +255,21 @@ struct HomeView: View {
                 }
             }
             .navigationDestination(for: HomeRoute.self) { route in
-                switch route {
-                case .dailyPractice: PracticeView()
+                Group {
+                    switch route {
+                    case .dailyPractice:        PracticeView()
+                    case .exercise(let title):  exerciseDestination(title)
+                    case .tool(let tool):       toolDestination(tool)
+                    }
                 }
+                .environment(\.providesNavigationStack, true)
             }
             // A reminder was tapped (or its Start Now action): jump to Daily Practice.
             .onChange(of: router.pendingDailyPractice, initial: true) { _, pending in
                 guard pending else { return }
                 router.pendingDailyPractice = false
                 showAbout = false
-                path = [.dailyPractice]
+                path = NavigationPath([HomeRoute.dailyPractice])
             }
         }
     }
@@ -264,8 +281,8 @@ struct HomeView: View {
         )
     }
 
-    private func toolLink<D: View>(destination: D, title: String, icon: String, color: Color) -> some View {
-        NavigationLink(destination: destination) {
+    private func toolLink(_ tool: Tool, title: String, icon: String, color: Color) -> some View {
+        NavigationLink(value: HomeRoute.tool(tool)) {
             ToolRow(title: title, icon: icon, color: color)
         }
         .buttonStyle(.plain)
@@ -302,8 +319,8 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func destination(for item: ExerciseItem) -> some View {
-        switch item.title {
+    private func exerciseDestination(_ title: String) -> some View {
+        switch title {
         case "Note Guesser":        QuizView()
         case "Triad Trainer":       TriadView()
         case "Pentatonic Trainer":  PentatonicView()
@@ -314,6 +331,21 @@ struct HomeView: View {
         case "Mode Quiz":           ModeQuizView()
         case "Compose":             CompositionListView()
         default:                    EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func toolDestination(_ tool: Tool) -> some View {
+        switch tool {
+        case .tuner:            TunerView()
+        case .metronome:        MetronomeView()
+        case .looper:           LooperView()
+        case .circleOfFifths:   CircleOfFifthsView()
+        case .scaleReference:   ScaleReferenceView()
+        case .modes:            ModeReferenceView()
+        case .pentatonicShapes: PentatonicReferenceView()
+        case .romanNumerals:    RomanNumeralReferenceView()
+        case .explorer:         ExploreView()
         }
     }
 }
