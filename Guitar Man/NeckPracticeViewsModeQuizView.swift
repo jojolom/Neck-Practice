@@ -93,10 +93,8 @@ struct ModeQuizView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
 
-        ZStack(alignment: .topTrailing) {
-            StaffView(columns: columns, lineSpacing: 9)
-                .frame(height: 130)
-                .padding(.horizontal, 16)
+        // The play button sits above the staff, not over it, so a high last note isn't covered.
+        VStack(alignment: .trailing, spacing: 0) {
             Button {
                 playScale()
             } label: {
@@ -109,6 +107,9 @@ struct ModeQuizView: View {
             }
             .padding(.trailing, 20)
             .accessibilityLabel("Play the scale")
+            StaffView(columns: columns, lineSpacing: 9)
+                .frame(height: 130)
+                .padding(.horizontal, 16)
         }
         .padding(.top, 4)
 

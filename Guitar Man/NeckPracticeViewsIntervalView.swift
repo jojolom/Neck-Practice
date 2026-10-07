@@ -146,14 +146,8 @@ struct IntervalView: View {
 
     private func staff(_ q: IntervalQuestion) -> some View {
         let showNames = revealAnswer || step != .identify
-        return ZStack(alignment: .topTrailing) {
-            StaffView(keySignature: q.keySignature, columns: [
-                StaffColumn(id: 0, pitches: [q.first], below: showNames ? q.first.name : nil),
-                StaffColumn(id: 1, pitches: [q.second], below: showNames ? q.second.name : nil),
-            ], lineSpacing: 11)
-            .frame(height: 150)
-            .padding(.horizontal, 20)
-
+        // The play button sits above the staff, not over it, so a high second note isn't covered.
+        return VStack(alignment: .trailing, spacing: 0) {
             Button {
                 playQuestion()
             } label: {
@@ -166,6 +160,13 @@ struct IntervalView: View {
             }
             .padding(.trailing, 24)
             .accessibilityLabel("Play the notes")
+
+            StaffView(keySignature: q.keySignature, columns: [
+                StaffColumn(id: 0, pitches: [q.first], below: showNames ? q.first.name : nil),
+                StaffColumn(id: 1, pitches: [q.second], below: showNames ? q.second.name : nil),
+            ], lineSpacing: 11)
+            .frame(height: 150)
+            .padding(.horizontal, 20)
         }
     }
 
