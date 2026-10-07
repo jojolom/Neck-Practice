@@ -6,6 +6,11 @@
 //   • a tempo change takes effect one new beat after the last scheduled click, never in the past,
 //   • an AVAudioEngine rendered offline, fed the way Metronome feeds it (clicks queued 0.2 s ahead
 //     from a coarse timer), plays every click on its exact sample, through a tempo change.
+//     The render is paced to 40× real time: AVAudioPlayerNode takes in a scheduled buffer on
+//     another thread, and unpaced, an offline render can reach a click's time before the buffer
+//     has been handed over (a click queued 0.2 s ahead is due a few microseconds later), so it's
+//     dropped. The app runs in real time, with 200 ms to spare against a hand-off measured well
+//     under 0.5 ms; since macOS 27 the unpaced render dropped clicks in most runs.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/metronome-check "Guitar Man/NeckPracticeServicesBeatSchedule.swift" scripts/metronome-check.swift && /tmp/metronome-check
@@ -104,13 +109,15 @@ struct MetronomeCheck {
         queue(through: lookahead)
         player.play()
 
-        // Render in ~50 ms chunks (the app's display timer is faster; this is the worse case).
+        // Render in ~50 ms chunks (the app's display timer is faster; this is the worse case),
+        // paced to 40× real time (see the header).
         let out = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 2205)!
         var rendered: [Float] = []
         var changedTempo = false
         while rendered.count < Int(16 * rate) {
             guard (try? engine.renderOffline(2205, to: out)) == .success else { break }
             rendered += Array(UnsafeBufferPointer(start: out.floatChannelData![0], count: Int(out.frameLength)))
+            Thread.sleep(forTimeInterval: Double(out.frameLength) / rate / 40)
             guard let nodeTime = player.lastRenderTime,
                   let now = player.playerTime(forNodeTime: nodeTime)?.sampleTime else { continue }
             if !changedTempo && now >= Int64(8 * rate) {
