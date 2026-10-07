@@ -1,0 +1,222 @@
+{
+  "attackRMS" : 0.14896883070468903,
+  "notes" : [
+    {
+      "cents" : 0.4,
+      "file" : "nylon-guitar-36.caf",
+      "midi" : 36
+    },
+    {
+      "cents" : -6.2,
+      "file" : "nylon-guitar-37.caf",
+      "midi" : 37
+    },
+    {
+      "cents" : -3.9,
+      "file" : "nylon-guitar-38.caf",
+      "midi" : 38
+    },
+    {
+      "cents" : 1.1,
+      "file" : "nylon-guitar-39.caf",
+      "midi" : 39
+    },
+    {
+      "cents" : -1.2,
+      "file" : "nylon-guitar-40.caf",
+      "midi" : 40
+    },
+    {
+      "cents" : 5,
+      "file" : "nylon-guitar-41.caf",
+      "midi" : 41
+    },
+    {
+      "cents" : 6.6,
+      "file" : "nylon-guitar-43.caf",
+      "midi" : 43
+    },
+    {
+      "cents" : 7.2,
+      "file" : "nylon-guitar-45.caf",
+      "midi" : 45
+    },
+    {
+      "cents" : 5.3,
+      "file" : "nylon-guitar-47.caf",
+      "midi" : 47
+    },
+    {
+      "cents" : -1.8,
+      "file" : "nylon-guitar-48.caf",
+      "midi" : 48
+    },
+    {
+      "cents" : 3.4,
+      "file" : "nylon-guitar-50.caf",
+      "midi" : 50
+    },
+    {
+      "cents" : 3.2,
+      "file" : "nylon-guitar-52.caf",
+      "midi" : 52
+    },
+    {
+      "cents" : 2.6,
+      "file" : "nylon-guitar-53.caf",
+      "midi" : 53
+    },
+    {
+      "cents" : 1.9,
+      "file" : "nylon-guitar-54.caf",
+      "midi" : 54
+    },
+    {
+      "cents" : -2,
+      "file" : "nylon-guitar-55.caf",
+      "midi" : 55
+    },
+    {
+      "cents" : 6.5,
+      "file" : "nylon-guitar-56.caf",
+      "midi" : 56
+    },
+    {
+      "cents" : 5.4,
+      "file" : "nylon-guitar-57.caf",
+      "midi" : 57
+    },
+    {
+      "cents" : 11.6,
+      "file" : "nylon-guitar-58.caf",
+      "midi" : 58
+    },
+    {
+      "cents" : 9.3,
+      "file" : "nylon-guitar-59.caf",
+      "midi" : 59
+    },
+    {
+      "cents" : 9.5,
+      "file" : "nylon-guitar-60.caf",
+      "midi" : 60
+    },
+    {
+      "cents" : 17,
+      "file" : "nylon-guitar-61.caf",
+      "midi" : 61
+    },
+    {
+      "cents" : 7.7,
+      "file" : "nylon-guitar-62.caf",
+      "midi" : 62
+    },
+    {
+      "cents" : 8.6,
+      "file" : "nylon-guitar-63.caf",
+      "midi" : 63
+    },
+    {
+      "cents" : 0.6,
+      "file" : "nylon-guitar-64.caf",
+      "midi" : 64
+    },
+    {
+      "cents" : 2.5,
+      "file" : "nylon-guitar-65.caf",
+      "midi" : 65
+    },
+    {
+      "cents" : 2.9,
+      "file" : "nylon-guitar-66.caf",
+      "midi" : 66
+    },
+    {
+      "cents" : 2.8,
+      "file" : "nylon-guitar-67.caf",
+      "midi" : 67
+    },
+    {
+      "cents" : 3.2,
+      "file" : "nylon-guitar-69.caf",
+      "midi" : 69
+    },
+    {
+      "cents" : -0.4,
+      "file" : "nylon-guitar-70.caf",
+      "midi" : 70
+    },
+    {
+      "cents" : 13.8,
+      "file" : "nylon-guitar-71.caf",
+      "midi" : 71
+    },
+    {
+      "cents" : 9.8,
+      "file" : "nylon-guitar-72.caf",
+      "midi" : 72
+    },
+    {
+      "cents" : 9.1,
+      "file" : "nylon-guitar-73.caf",
+      "midi" : 73
+    },
+    {
+      "cents" : 10.3,
+      "file" : "nylon-guitar-74.caf",
+      "midi" : 74
+    },
+    {
+      "cents" : 3.4,
+      "file" : "nylon-guitar-75.caf",
+      "midi" : 75
+    },
+    {
+      "cents" : 4.7,
+      "file" : "nylon-guitar-76.caf",
+      "midi" : 76
+    },
+    {
+      "cents" : -1.9,
+      "file" : "nylon-guitar-77.caf",
+      "midi" : 77
+    },
+    {
+      "cents" : 0.3,
+      "file" : "nylon-guitar-78.caf",
+      "midi" : 78
+    },
+    {
+      "cents" : -1.7,
+      "file" : "nylon-guitar-79.caf",
+      "midi" : 79
+    },
+    {
+      "cents" : -2.6,
+      "file" : "nylon-guitar-80.caf",
+      "midi" : 80
+    },
+    {
+      "cents" : 8.3,
+      "file" : "nylon-guitar-81.caf",
+      "midi" : 81
+    },
+    {
+      "cents" : 4.2,
+      "file" : "nylon-guitar-82.caf",
+      "midi" : 82
+    },
+    {
+      "cents" : 2.4,
+      "file" : "nylon-guitar-83.caf",
+      "midi" : 83
+    },
+    {
+      "cents" : 5.5,
+      "file" : "nylon-guitar-84.caf",
+      "midi" : 84
+    }
+  ],
+  "sampleRate" : 44100,
+  "source" : "FreePats Spanish Classical Guitar 2019-06-18 (https:\/\/freepats.zenvoid.org\/Guitar\/acoustic-guitar.html), CC0 1.0"
+}

@@ -439,7 +439,7 @@ private struct AboutView: View {
                 Spacer()
 
                 // App Icon
-                Image("AppIcon")
+                Image("AboutIcon")
                     .resizable()
                     .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
@@ -485,7 +485,12 @@ private struct AboutView: View {
                     Text("Built with SwiftUI")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                    Text("Guitar sounds recorded by the FreePats project (public domain)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
                 }
+                .padding(.horizontal, 32)
                 .padding(.bottom, 24)
             }
             .navigationTitle("About")

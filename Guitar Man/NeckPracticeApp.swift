@@ -57,6 +57,8 @@ struct NeckPracticeApp: App {
                 .environment(audioSettings)
                 .onAppear {
                     UIApplication.shared.isIdleTimerDisabled = true
+                    // Decode the guitar recordings in the background, ready for the first note.
+                    GuitarSampleBank.preload()
                 }
                 .onDisappear {
                     UIApplication.shared.isIdleTimerDisabled = false
