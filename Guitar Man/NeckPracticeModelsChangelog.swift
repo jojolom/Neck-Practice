@@ -41,13 +41,15 @@ enum Changelog {
             releasedOn: DateComponents(year: 2026, month: 10, day: 6),
             items: [
                 ChangelogItem(symbol: "music.note.house", title: "Compose",
-                              detail: "Drag Roman numerals onto a staff to write your own chord progressions in any key, save them, and play them while the app listens and marks each chord."),
+                              detail: "Drag Roman numerals onto a staff to write your own chord progressions in any key, in 4/4 or 3/4, mixing quarter, half, dotted half, and whole notes. Save them, and play them while the app listens and marks each chord."),
                 ChangelogItem(symbol: "arrow.up.and.down", title: "Interval Trainer",
                               detail: "Name the interval on the staff in any key, then find it on the neck. Bonus rounds on inversions and compound intervals."),
                 ChangelogItem(symbol: "circle.hexagongrid", title: "Modes",
                               detail: "A Modes reference: what each mode is, how it differs from major or minor, and how to play it. Plus a Mode Quiz."),
                 ChangelogItem(symbol: "music.note.list", title: "Triads on the staff",
                               detail: "The Triad Trainer now writes every shape's notes on the staff, too."),
+                ChangelogItem(symbol: "speaker.wave.2", title: "A real guitar sound",
+                              detail: "Every note the app plays is now a recorded nylon-string guitar, exactly in tune, with chords and scales in tight time."),
             ]
         ),
         ChangelogEntry(

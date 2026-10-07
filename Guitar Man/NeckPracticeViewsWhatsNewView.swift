@@ -2,7 +2,8 @@
 //  WhatsNewView.swift
 //  Neck Practice
 //
-//  The "What's New" sheet shown once after an update, and the Version History screen in About.
+//  The "What's New" sheet shown once after an update (the new version first, then every earlier
+//  one to scroll through), and the Version History screen in About.
 //
 
 import SwiftUI
@@ -36,10 +37,17 @@ private struct ChangelogItemRow: View {
 
 // MARK: - What's New sheet
 
+/// This version's notes first, then every earlier version's below them to scroll through.
 struct WhatsNewView: View {
 
     let entry: ChangelogEntry
     let onContinue: () -> Void
+
+    /// Versions before this one, newest first.
+    private var earlier: [ChangelogEntry] {
+        guard let index = Changelog.entries.firstIndex(where: { $0.version == entry.version }) else { return [] }
+        return Array(Changelog.entries[(index + 1)...])
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,6 +66,31 @@ struct WhatsNewView: View {
 
                     ForEach(entry.items) { item in
                         ChangelogItemRow(item: item)
+                    }
+
+                    if !earlier.isEmpty {
+                        Text("Earlier Versions")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                            .padding(.top, 20)
+                    }
+                    ForEach(earlier) { older in
+                        VStack(alignment: .leading, spacing: 20) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Version \(older.version)")
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                Spacer()
+                                Text(older.released)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(older.items) { item in
+                                ChangelogItemRow(item: item)
+                            }
+                        }
+                        .padding(.top, 8)
+                        .accessibilityElement(children: .contain)
                     }
                 }
                 .padding(.horizontal, 28)

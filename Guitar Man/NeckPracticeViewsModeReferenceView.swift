@@ -14,7 +14,7 @@ struct ModeReferenceView: View {
     @State private var mode: Mode = .dorian
     @State private var root: Note = .d
     @State private var showDegrees = true
-    @State private var showIntro = true
+    @State private var showIntro = false
     @State private var playingIndex: Int? = nil
     @State private var isPlaying = false
     @Environment(AudioSettings.self) private var audioSettings
