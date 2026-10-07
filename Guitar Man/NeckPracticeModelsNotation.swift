@@ -177,6 +177,12 @@ enum NoteValue: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The note value lasting `beats` quarter notes (1–4), or nil.
+    init?(beats: Int) {
+        guard let value = Self.allCases.first(where: { $0.beats == beats }) else { return nil }
+        self = value
+    }
+
     var beats: Int {
         switch self {
         case .quarter:    return 1

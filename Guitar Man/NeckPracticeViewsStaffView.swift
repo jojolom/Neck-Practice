@@ -4,8 +4,8 @@
 //
 //  A treble-clef staff in guitar notation (written an octave above concert pitch): clef,
 //  key signature, optional time signature, and columns of notes — one note for a melody,
-//  several stacked for a chord — with accidentals, ledger lines, stems, and a line of text
-//  above and below each column. Used by the Triad, Interval, Modes, and Composition screens.
+//  several stacked for a chord, or a rest — with accidentals, ledger lines, stems, and a line
+//  of text above and below each column. Used by the Triad, Interval, Modes, and Composition screens.
 //
 
 import SwiftUI
@@ -21,6 +21,8 @@ struct StaffColumn: Identifiable {
     var below: String? = nil
     /// Note-head color; nil draws in the label color.
     var color: Color? = nil
+    /// With no pitches: a rest of this value.
+    var rest: NoteValue? = nil
 }
 
 struct StaffView: View {
@@ -33,6 +35,9 @@ struct StaffView: View {
     var beatsPerMeasure: Int? = nil
     /// Draw a bar line at the right edge.
     var showsEndBarline = false
+    /// Columns share the full width equally (no margins), so they line up with views laid over
+    /// the staff in equal parts (the Composition screen's beats).
+    var edgeToEdge = false
     /// Distance between two staff lines; everything else scales from it.
     var lineSpacing: CGFloat = 10
 
@@ -123,8 +128,8 @@ struct StaffView: View {
 
         // ── Columns ──────────────────────────────────────────
         guard !columns.isEmpty else { return }
-        let start = x + s * 0.8
-        let slot = max(0, right - start - s * 0.4) / CGFloat(columns.count)
+        let start = edgeToEdge ? 0 : x + s * 0.8
+        let slot = max(0, right - start - (edgeToEdge ? 0 : s * 0.4)) / CGFloat(columns.count)
         for (i, column) in columns.enumerated() {
             let noteX = start + slot * (CGFloat(i) + 0.5)
             drawColumn(column, x: noteX, size: size, in: &context)
@@ -138,6 +143,10 @@ struct StaffView: View {
         let lowest = positions.min() ?? 4
         let highest = positions.max() ?? 4
         let stemUp = Double(lowest + highest) / 2 < 4
+
+        if positions.isEmpty, let rest = column.rest {
+            drawRest(rest, x: x, size: size, color: ink, in: &context)
+        }
 
         if !positions.isEmpty {
             // ── Ledger lines (only up to the outermost note) ──
@@ -225,6 +234,28 @@ struct StaffView: View {
         }
     }
 
+    /// A whole rest hangs from the fourth line, a half rest sits on the middle line, and a quarter
+    /// rest is the usual squiggle, centered on the staff.
+    private func drawRest(_ value: NoteValue, x: CGFloat, size: CGSize, color: Color, in context: inout GraphicsContext) {
+        let s = lineSpacing
+        switch value {
+        case .whole, .half:
+            let top = value == .whole ? y(6, in: size) : y(4, in: size) - s * 0.5
+            context.fill(Path(CGRect(x: x - s * 0.6, y: top, width: s * 1.2, height: s * 0.5)), with: .color(color))
+        case .quarter, .dottedHalf:
+            // Drawn as a path (no font has it reliably): a zigzag down from the top line,
+            // ending in a small hook.
+            let top = y(7, in: size), w = s * 0.55
+            var p = Path()
+            p.move(to: CGPoint(x: x - w * 0.35, y: top))
+            p.addLine(to: CGPoint(x: x + w * 0.45, y: top + s * 1.0))
+            p.addQuadCurve(to: CGPoint(x: x - w * 0.1, y: top + s * 1.9), control: CGPoint(x: x - w * 0.55, y: top + s * 1.35))
+            p.addLine(to: CGPoint(x: x + w * 0.5, y: top + s * 2.75))
+            p.addQuadCurve(to: CGPoint(x: x - w * 0.15, y: top + s * 3.7), control: CGPoint(x: x - w * 0.9, y: top + s * 2.7))
+            context.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: s * 0.3, lineCap: .round, lineJoin: .round))
+        }
+    }
+
     private func drawAccidental(_ accidental: Int, at point: CGPoint, color: Color, in context: inout GraphicsContext) {
         let symbol = accidental == 0 ? "♮" : SpelledPitch.accidentalSymbol(accidental)
         // A flat's bowl sits below the middle of the glyph, so lift it to land on its line or space.
@@ -239,8 +270,12 @@ struct StaffView: View {
             let count = abs(keySignature.fifths)
             parts.append("Key signature: \(count) \(keySignature.fifths > 0 ? "sharp" : "flat")\(count == 1 ? "" : "s")")
         }
-        for column in columns where !column.pitches.isEmpty {
-            parts.append(column.pitches.map(\.name).joined(separator: ", "))
+        for column in columns {
+            if !column.pitches.isEmpty {
+                parts.append(column.pitches.map(\.name).joined(separator: ", "))
+            } else if let rest = column.rest {
+                parts.append("\(rest.displayName) rest")
+            }
         }
         return parts.joined(separator: ". ")
     }

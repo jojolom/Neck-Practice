@@ -60,6 +60,26 @@ enum ChordAnalyzer {
         return chroma.map { $0 / total }
     }
 
+    /// Loudness (dBFS RMS) shown as an empty level bar, and as a full one.
+    static let quietDB: Float = -55
+    static let loudDB: Float = -18
+
+    /// The next level-bar heights (0–1 per pitch class) after an analysis: `chroma` scaled by
+    /// how loud the window was (`rms`), eased from `previous` — up fast, down slowly — so the
+    /// bars rise with a strum and settle as it rings instead of jumping every analysis.
+    static func displayLevels(previous: [Double], chroma: [Double], rms: Float) -> [Double] {
+        guard previous.count == 12, chroma.count == 12, chroma.allSatisfy(\.isFinite) else { return previous }
+        let db = 20 * log10(max(rms, 1e-9))
+        let loudness = Double(min(max((db - quietDB) / (loudDB - quietDB), 0), 1))
+        let peak = chroma.max() ?? 0
+        return (0..<12).map { pc in
+            let target = peak > 0 ? loudness * chroma[pc] / peak : 0
+            let current = previous[pc]
+            let rate = target > current ? 0.5 : 0.15
+            return min(max(current + (target - current) * rate, 0), 1)
+        }
+    }
+
     /// Whether `chroma` sounds like the chord made of `pitchClasses`: at least half the sound is
     /// on chord notes, every chord note is clearly present (a quarter of the loudest one), and no
     /// other note comes close to the loudest. That's what tells C (C E G) from Am (A C E): an A minor

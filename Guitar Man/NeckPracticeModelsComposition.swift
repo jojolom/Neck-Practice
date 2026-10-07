@@ -2,10 +2,13 @@
 //  Composition.swift
 //  Guitar Man
 //
-//  A chord progression the student writes by dropping Roman numerals onto a staff: a key,
-//  2–8 measures, and one note value for every chord (quarter, half, dotted half, or whole —
-//  dotted halves put it in 3/4). The app never plays it; the student does. Saved compositions
-//  live in UserDefaults as JSON, like practice plans.
+//  A chord progression the student writes by dropping Roman numerals onto a staff: a key, 4/4
+//  or 3/4 time, 2–8 measures, and chords of any length from a quarter to a whole note, placed
+//  on any beat. Beats with no chord are rests, so every measure always adds up. Chords never
+//  cross a barline or overlap: one that wouldn't fit is shortened to fit. The student plays it
+//  (the app only plays it with the hidden option in CompositionPlayer). Saved compositions live
+//  in UserDefaults as JSON, like practice plans; ones saved before chords had their own lengths
+//  load as the same music.
 //
 
 import Foundation
@@ -13,23 +16,41 @@ import Observation
 
 // MARK: - Composition
 
-struct Composition: Codable, Identifiable, Hashable {
+struct Composition: Identifiable, Hashable {
     var id = UUID()
     var name: String = "Untitled"
     var keyRoot: Note = .c
     var isMinor: Bool = false
-    var measureCount: Int = 4
-    var noteValue: NoteValue = .whole
-    /// The chord in each slot as a scale degree (1–7), or nil for an empty slot.
-    /// There are `measureCount × slotsPerMeasure` slots.
-    var slots: [Int?] = Array(repeating: nil, count: 4)
+    private(set) var measureCount: Int = 4
+    /// 4 (4/4) or 3 (3/4).
+    private(set) var beatsPerMeasure: Int = 4
+    /// The chords in order; see the header for the rules they keep.
+    private(set) var chords: [PlacedChord] = []
     var updatedAt: Date = .now
 
     static let measureRange = 2...8
+    static let meters = [4, 3]
 
-    var beatsPerMeasure: Int { noteValue == .dottedHalf ? 3 : 4 }
-    var slotsPerMeasure: Int { beatsPerMeasure / noteValue.beats }
-    var slotCount: Int { measureCount * slotsPerMeasure }
+    /// A chord on beat `start` (counting quarter-note beats from the start of the piece).
+    struct PlacedChord: Codable, Hashable, Identifiable {
+        var start: Int
+        var beats: Int
+        /// Scale degree, 1–7.
+        var degree: Int
+
+        var id: Int { start }
+        var end: Int { start + beats }
+        var value: NoteValue { NoteValue(beats: beats) ?? .quarter }
+    }
+
+    /// A gap between chords, written as one rest symbol: `glyph` is the rest's note value.
+    struct Rest: Hashable {
+        var start: Int
+        var beats: Int
+        var glyph: NoteValue
+    }
+
+    var totalBeats: Int { measureCount * beatsPerMeasure }
 
     var scale: DiatonicScale { isMinor ? .minor : .major }
     var keySignature: KeySignature { KeySignature(root: keyRoot, isMinor: isMinor) }
@@ -37,27 +58,109 @@ struct Composition: Codable, Identifiable, Hashable {
     /// "E♭ Major".
     var keyName: String { isMinor ? keySignature.minorKeyName : keySignature.majorKeyName }
 
-    var isEmpty: Bool { slots.allSatisfy { $0 == nil } }
+    /// "4/4".
+    var meterName: String { "\(beatsPerMeasure)/4" }
 
-    /// Changes the measure count and/or note value, keeping each chord where it falls in time:
-    /// a chord at the start of measure 2 stays at the start of measure 2. Chords that no longer
-    /// fit (past the last measure, or two landing in one slot) are dropped.
-    mutating func reshape(measureCount newCount: Int, noteValue newValue: NoteValue) {
-        let oldSlotsPerMeasure = slotsPerMeasure
-        let oldBeats = noteValue.beats
-        let old = slots
-        measureCount = min(max(newCount, Self.measureRange.lowerBound), Self.measureRange.upperBound)
-        noteValue = newValue
-        var reshaped = [Int?](repeating: nil, count: slotCount)
-        for (i, chord) in old.enumerated() {
-            guard let chord else { continue }
-            let measure = i / oldSlotsPerMeasure
-            let beat = (i % oldSlotsPerMeasure) * oldBeats
-            guard measure < measureCount, beat < beatsPerMeasure else { continue }
-            let slot = measure * slotsPerMeasure + beat / noteValue.beats
-            if reshaped[slot] == nil { reshaped[slot] = chord }
+    var isEmpty: Bool { chords.isEmpty }
+
+    /// Note values that fit in a measure of this meter.
+    var noteValues: [NoteValue] { NoteValue.allCases.filter { $0.beats <= beatsPerMeasure } }
+
+    /// The chord sounding on `beat`, if any.
+    func chord(covering beat: Int) -> PlacedChord? {
+        chords.first { $0.start <= beat && beat < $0.end }
+    }
+
+    /// The longest a chord starting on `beat` could be: to the next chord or the barline.
+    func room(at beat: Int) -> Int {
+        let barline = (beat / beatsPerMeasure + 1) * beatsPerMeasure
+        let next = chords.first { $0.start > beat }?.start ?? barline
+        return max(0, min(barline, next) - beat)
+    }
+
+    // MARK: Editing
+
+    /// Puts `degree` on `beat` for `value`, shortened to fit before the next chord or the barline.
+    /// A chord already starting there is replaced; one still ringing there is cut short. Returns
+    /// the beats the new chord got (less than `value` when it had to be shortened), or nil if
+    /// `beat` is outside the piece.
+    @discardableResult
+    mutating func place(_ degree: Int, at beat: Int, value: NoteValue) -> Int? {
+        guard (0..<totalBeats).contains(beat), (1...7).contains(degree) else { return nil }
+        chords.removeAll { $0.start == beat }
+        if let ringing = chords.firstIndex(where: { $0.start < beat && beat < $0.end }) {
+            chords[ringing].beats = beat - chords[ringing].start
         }
-        slots = reshaped
+        let beats = min(value.beats, room(at: beat))
+        chords.append(PlacedChord(start: beat, beats: beats, degree: degree))
+        chords.sort { $0.start < $1.start }
+        return beats
+    }
+
+    /// Removes the chord sounding on `beat`, leaving rests.
+    mutating func removeChord(covering beat: Int) {
+        chords.removeAll { $0.start <= beat && beat < $0.end }
+    }
+
+    /// Makes the chord starting on `start` last `value`, shortened to fit like `place`.
+    mutating func setLength(ofChordAt start: Int, to value: NoteValue) {
+        guard let index = chords.firstIndex(where: { $0.start == start }) else { return }
+        let others = chords.filter { $0.start != start }
+        let barline = (start / beatsPerMeasure + 1) * beatsPerMeasure
+        let next = others.first { $0.start > start }?.start ?? barline
+        chords[index].beats = max(1, min(value.beats, min(barline, next) - start))
+    }
+
+    mutating func clearChords() { chords = [] }
+
+    /// Changes the number of measures; chords in measures that go away are dropped.
+    mutating func setMeasureCount(_ count: Int) {
+        measureCount = min(max(count, Self.measureRange.lowerBound), Self.measureRange.upperBound)
+        let end = totalBeats
+        chords.removeAll { $0.start >= end }
+    }
+
+    /// Changes the meter, keeping each chord in its measure on the same beat. Going from 4/4 to
+    /// 3/4, a chord on beat 4 is dropped and longer ones are shortened to the new barline.
+    mutating func setBeatsPerMeasure(_ beats: Int) {
+        guard Self.meters.contains(beats), beats != beatsPerMeasure else { return }
+        let old = beatsPerMeasure
+        beatsPerMeasure = beats
+        chords = chords.compactMap { chord in
+            let measure = chord.start / old, offset = chord.start % old
+            guard offset < beats else { return nil }
+            return PlacedChord(start: measure * beats + offset, beats: min(chord.beats, beats - offset),
+                               degree: chord.degree)
+        }
+    }
+
+    // MARK: Rests
+
+    /// The rests filling measure `measure`'s gaps, as they're written: a whole rest for an empty
+    /// measure (in any meter), a half rest for two free beats starting the measure (or its
+    /// second half, in 4/4), and quarter rests otherwise.
+    func rests(inMeasure measure: Int) -> [Rest] {
+        let first = measure * beatsPerMeasure, last = first + beatsPerMeasure
+        let inMeasure = chords.filter { $0.start >= first && $0.start < last }
+        if inMeasure.isEmpty { return [Rest(start: first, beats: beatsPerMeasure, glyph: .whole)] }
+        var rests: [Rest] = []
+        var beat = first
+        while beat < last {
+            if let chord = inMeasure.first(where: { $0.start == beat }) {
+                beat = chord.end
+                continue
+            }
+            let offset = beat - first
+            let strong = offset == 0 || (beatsPerMeasure == 4 && offset == 2)
+            if strong && beat + 1 < last && chord(covering: beat + 1) == nil {
+                rests.append(Rest(start: beat, beats: 2, glyph: .half))
+                beat += 2
+            } else {
+                rests.append(Rest(start: beat, beats: 1, glyph: .quarter))
+                beat += 1
+            }
+        }
+        return rests
     }
 
     // MARK: Chords
@@ -65,6 +168,54 @@ struct Composition: Codable, Identifiable, Hashable {
     /// The chord on scale degree `degree` (1–7) of this key.
     func chord(degree: Int) -> CompositionChord {
         CompositionChord(degree: degree, keySignature: keySignature, isMinor: isMinor)
+    }
+}
+
+// MARK: - Saving
+
+extension Composition: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, name, keyRoot, isMinor, measureCount, beatsPerMeasure, chords, updatedAt
+        // Before chords had their own lengths: one note value for all, and one chord (or nil) per slot.
+        case noteValue, slots
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        keyRoot = try c.decode(Note.self, forKey: .keyRoot)
+        isMinor = try c.decode(Bool.self, forKey: .isMinor)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        let measures = try c.decode(Int.self, forKey: .measureCount)
+        measureCount = min(max(measures, Self.measureRange.lowerBound), Self.measureRange.upperBound)
+        if let chords = try c.decodeIfPresent([PlacedChord].self, forKey: .chords) {
+            let beats = try c.decode(Int.self, forKey: .beatsPerMeasure)
+            beatsPerMeasure = Self.meters.contains(beats) ? beats : 4
+            // Re-apply the rules, in case the saved data was ever out of shape.
+            for chord in chords.sorted(by: { $0.start < $1.start }) {
+                place(chord.degree, at: chord.start, value: NoteValue(beats: chord.beats) ?? .quarter)
+            }
+        } else {
+            let value = try c.decode(NoteValue.self, forKey: .noteValue)
+            let slots = try c.decode([Int?].self, forKey: .slots)
+            beatsPerMeasure = value == .dottedHalf ? 3 : 4
+            for (slot, degree) in slots.enumerated() {
+                if let degree { place(degree, at: slot * value.beats, value: value) }
+            }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(keyRoot, forKey: .keyRoot)
+        try c.encode(isMinor, forKey: .isMinor)
+        try c.encode(measureCount, forKey: .measureCount)
+        try c.encode(beatsPerMeasure, forKey: .beatsPerMeasure)
+        try c.encode(chords, forKey: .chords)
+        try c.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

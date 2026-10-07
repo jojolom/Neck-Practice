@@ -15,25 +15,23 @@ struct CompositionPlayAlongView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var listener = ChordListener()
-    /// Index into `chordSlots` of the chord being listened for.
+    /// Index into the composition's chords of the one being listened for.
     @State private var current = 0
-    /// Slot → heard (true) or skipped (false).
+    /// Chord (by start beat) → heard (true) or skipped (false).
     @State private var results: [Int: Bool] = [:]
     /// Strum count when the current chord came up: it needs a fresh strum.
     @State private var strumsAtStart = 0
     /// Consecutive analyses that matched, so one lucky frame doesn't count.
     @State private var matchStreak = 0
 
-    /// Slots that hold a chord, in order (empty beats are skipped).
-    private var chordSlots: [Int] {
-        composition.slots.indices.filter { composition.slots[$0] != nil }
-    }
+    /// The chords in order (rests in between are skipped: you play at your own pace).
+    private var placed: [Composition.PlacedChord] { composition.chords }
 
-    private var isFinished: Bool { current >= chordSlots.count }
+    private var isFinished: Bool { current >= placed.count }
 
     private var currentChord: CompositionChord? {
-        guard !isFinished, let degree = composition.slots[chordSlots[current]] else { return nil }
-        return composition.chord(degree: degree)
+        guard !isFinished else { return nil }
+        return composition.chord(degree: placed[current].degree)
     }
 
     var body: some View {
@@ -42,7 +40,7 @@ struct CompositionPlayAlongView: View {
                 VStack(spacing: 18) {
                     statusCard
 
-                    CompositionStaffView(composition: composition, slotColors: slotColors)
+                    CompositionStaffView(composition: composition, chordColors: chordColors)
                         .padding(.horizontal, 12)
 
                     if listener.isListening && !isFinished {
@@ -109,17 +107,17 @@ struct CompositionPlayAlongView: View {
                     .foregroundStyle(.secondary)
             } else if isFinished {
                 let heard = results.values.filter { $0 }.count
-                let allHeard = heard == chordSlots.count
+                let allHeard = heard == placed.count
                 Image(systemName: allHeard ? "checkmark.seal.fill" : "forward.circle.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(allHeard ? .green : .orange)
-                Text("\(heard) of \(chordSlots.count) chords")
+                Text("\(heard) of \(placed.count) chords")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                 Text(allHeard ? "Every chord, clean. Nice." : "Orange ones were skipped. Try them again?")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if let chord = currentChord {
-                Text("Chord \(current + 1) of \(chordSlots.count)")
+                Text("Chord \(current + 1) of \(placed.count)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(chord.romanNumeral)
@@ -143,17 +141,20 @@ struct CompositionPlayAlongView: View {
         .padding(.horizontal, 16)
     }
 
-    /// What the mic hears, by note: the chord's notes in the accent color.
+    /// What the mic hears, by note: the chord's notes in the accent color. Heights follow the
+    /// listener's smoothed display levels, so the bars stay low when it's quiet and glide.
     private var chromaBars: some View {
         let tones = currentChord?.pitchClasses ?? []
         let names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]
-        let peak = max(listener.chroma.max() ?? 0, 0.0001)
+        let maxBarHeight: CGFloat = 44
         return HStack(alignment: .bottom, spacing: 4) {
             ForEach(0..<12, id: \.self) { pc in
+                let level = min(max(listener.displayLevels[pc], 0), 1)
                 VStack(spacing: 3) {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(tones.contains(pc) ? Color.accentColor : Color(.systemGray3))
-                        .frame(height: max(3, 60 * listener.chroma[pc] / peak))
+                        .frame(height: max(3, maxBarHeight * level))
+                        .frame(height: maxBarHeight, alignment: .bottom)
                     Text(names[pc])
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
                         .foregroundStyle(tones.contains(pc) ? .primary : .secondary)
@@ -161,15 +162,16 @@ struct CompositionPlayAlongView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .frame(height: 80, alignment: .bottom)
-        .animation(.linear(duration: 0.08), value: listener.chroma)
+        .frame(height: maxBarHeight + 16, alignment: .bottom)
+        .clipped()
+        .animation(.easeOut(duration: 0.15), value: listener.displayLevels)
         .accessibilityHidden(true)
     }
 
-    private var slotColors: [Int: Color] {
+    private var chordColors: [Int: Color] {
         var colors: [Int: Color] = [:]
-        for (slot, heard) in results { colors[slot] = heard ? .green : .orange }
-        if !isFinished { colors[chordSlots[current]] = .accentColor }
+        for (start, heard) in results { colors[start] = heard ? .green : .orange }
+        if !isFinished { colors[placed[current].start] = .accentColor }
         return colors
     }
 
@@ -188,7 +190,7 @@ struct CompositionPlayAlongView: View {
     private func advance(heard: Bool) {
         guard !isFinished else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            results[chordSlots[current]] = heard
+            results[placed[current].start] = heard
             current += 1
         }
         strumsAtStart = listener.strumCount

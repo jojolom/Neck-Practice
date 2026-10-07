@@ -20,6 +20,10 @@ final class ChordListener {
 
     /// Share of the sound on each pitch class (C = 0 … B = 11), or all zeros when quiet.
     private(set) var chroma: [Double] = Array(repeating: 0, count: 12)
+    /// What the level bars show (0–1 per pitch class): the chroma scaled by how loud it is and
+    /// smoothed, so the bars rise with a strum and settle as it rings instead of jumping with
+    /// every analysis. Only for display; matching uses `chroma`.
+    private(set) var displayLevels: [Double] = Array(repeating: 0, count: 12)
     /// Microphone input level (0–1).
     private(set) var signalLevel: Float = 0
     /// Goes up by one on every strum.
@@ -111,6 +115,7 @@ final class ChordListener {
         }
         engine.stop()
         chroma = Array(repeating: 0, count: 12)
+        displayLevels = Array(repeating: 0, count: 12)
         signalLevel = 0
     }
 
@@ -164,10 +169,10 @@ final class ChordListener {
         samplesSinceAnalysis += frameCount
 
         var newChroma: [Double]? = nil
+        var windowRMS: Float = 0
         if samplesSinceAnalysis >= analysisHop && ring.count >= needed {
             samplesSinceAnalysis = 0
             let window = Array(ring.suffix(needed))
-            var windowRMS: Float = 0
             vDSP_rmsqv(window, 1, &windowRMS, vDSP_Length(window.count))
             newChroma = windowRMS > minRMS
                 ? ChordAnalyzer.chroma(samples: window, sampleRate: sampleRate)
@@ -178,7 +183,11 @@ final class ChordListener {
             guard let self else { return }
             self.signalLevel = level
             if isStrum { self.strumCount += 1 }
-            if let newChroma { self.chroma = newChroma }
+            if let newChroma {
+                self.chroma = newChroma
+                self.displayLevels = ChordAnalyzer.displayLevels(previous: self.displayLevels,
+                                                                    chroma: newChroma, rms: windowRMS)
+            }
         }
     }
 }

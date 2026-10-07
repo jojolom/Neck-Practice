@@ -3,8 +3,10 @@
 //
 //  Offline check for Composition: ChordAnalyzer hears synthetic guitar strums (harmonics,
 //  decay, detuning, noise, and a weak low fundamental like a phone mic gives) as the chord
-//  that was played and not as its near neighbours (C vs Am, D vs Dm); and the Composition
-//  model names chords in the key (IV in E♭ is A♭) and keeps chords in place when reshaped.
+//  that was played and not as its near neighbours (C vs Am, D vs Dm); the Play Along level
+//  bars stay in range, low for room noise, and glide rather than jump; and the Composition
+//  model names chords in the key (IV in E♭ is A♭), keeps every measure adding up (chords of
+//  their own lengths, shortened to fit, rests in the gaps), and loads compositions saved before.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/chord-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsComposition.swift" "Guitar Man/NeckPracticeServicesChordAnalyzer.swift" scripts/chord-check.swift && /tmp/chord-check
@@ -26,6 +28,7 @@ struct ChordCheck {
 
     static func main() {
         checkAnalyzer()
+        checkDisplayLevels()
         checkComposition()
         print(failures == 0 ? "All chord checks passed." : "\(failures) failure(s).")
         exit(failures == 0 ? 0 : 1)
@@ -106,6 +109,58 @@ struct ChordCheck {
         check(!ChordAnalyzer.matches(chroma: silence, pitchClasses: [0, 4, 7]), "silence isn't a chord")
     }
 
+    // MARK: - Level bars
+
+    static func checkDisplayLevels() {
+        let zeros = [Double](repeating: 0, count: 12)
+        let cMajor: Set<Int> = [0, 4, 7]
+        func meanChange(_ a: [Double], _ b: [Double]) -> Double {
+            zip(a, b).map { abs($0 - $1) }.reduce(0, +) / 12
+        }
+
+        // Quiet room noise (about -50 dBFS) keeps the bars low.
+        var levels = zeros
+        for _ in 0..<30 {
+            let noise = (0..<20_000).map { _ in Float(Double.random(in: -0.005...0.005)) }
+            let chroma = ChordAnalyzer.chroma(samples: noise, sampleRate: sampleRate)
+            levels = ChordAnalyzer.displayLevels(previous: levels, chroma: chroma, rms: 0.003)
+        }
+        check(levels.allSatisfy { $0 <= 0.2 }, "room noise bars stay low (max \(levels.max()!))")
+
+        // A loud C strum ringing out: each frame a fresh, noisy analysis, getting quieter.
+        levels = zeros
+        var previousRaw = zeros
+        var rawJitter = 0.0, smoothJitter = 0.0, maxDrop = 0.0
+        var rms: Float = 0.3  // louder than full scale on the bars
+        for frame in 0..<20 {
+            let chroma = ChordAnalyzer.chroma(samples: strum([48, 52, 55, 60, 64], weakLowFundamental: true),
+                                              sampleRate: sampleRate)
+            let next = ChordAnalyzer.displayLevels(previous: levels, chroma: chroma, rms: rms)
+            check(next.allSatisfy { (0...1).contains($0) }, "bars stay within 0–1")
+            if frame == 2 {
+                check(cMajor.allSatisfy { next[$0] >= 0.3 }, "a strum raises its notes' bars within 3 frames")
+            }
+            let peak = chroma.max() ?? 1
+            let raw = chroma.map { $0 / peak }
+            if frame > 0 {
+                rawJitter += meanChange(raw, previousRaw)
+                smoothJitter += meanChange(next, levels)
+                maxDrop = max(maxDrop, zip(levels, next).map { $0 - $1 }.max() ?? 0)
+            }
+            previousRaw = raw
+            levels = next
+            rms *= 0.8
+        }
+        check(smoothJitter < rawJitter / 2,
+              "bars move less than half as much as the raw analysis (\(smoothJitter) vs \(rawJitter))")
+        check(maxDrop <= 0.16, "bars fall gradually (largest drop \(maxDrop))")
+
+        // Garbage in (NaN) leaves the bars alone.
+        let kept = ChordAnalyzer.displayLevels(previous: levels, chroma: [Double](repeating: .nan, count: 12), rms: 0.1)
+        check(kept == levels, "NaN analysis is ignored")
+        print("ok   level bars")
+    }
+
     // MARK: - Composition
 
     static func checkComposition() {
@@ -144,22 +199,97 @@ struct ChordCheck {
             }
         }
 
-        // Slots: 4 measures of whole notes = 4 slots; reshape keeps chords where they fall in time.
+        // Placing chords: each its own length, shortened to fit, never crossing a barline.
         var r = Composition()
-        check(r.slotCount == 4 && r.slots.count == 4, "default slots")
-        r.slots = [1, 4, 5, 1]
-        r.reshape(measureCount: 4, noteValue: .quarter)
-        check(r.slots.count == 16 && r.slots[0] == 1 && r.slots[4] == 4 && r.slots[8] == 5 && r.slots[12] == 1
-              && r.slots.compactMap { $0 }.count == 4, "whole → quarter keeps each chord on its downbeat")
-        r.slots[2] = 6
-        r.reshape(measureCount: 4, noteValue: .half)
-        check(r.slots == [1, 6, 4, nil, 5, nil, 1, nil], "quarter → half: \(r.slots)")
-        r.reshape(measureCount: 2, noteValue: .half)
-        check(r.slots == [1, 6, 4, nil], "fewer measures drops the end: \(r.slots)")
-        r.reshape(measureCount: 3, noteValue: .dottedHalf)
-        check(r.beatsPerMeasure == 3 && r.slots == [1, 4, nil], "dotted half is 3/4, one chord a bar: \(r.slots)")
-        r.reshape(measureCount: 1, noteValue: .whole)
-        check(r.measureCount == 2, "at least 2 measures")
+        check(r.beatsPerMeasure == 4 && r.measureCount == 4 && r.isEmpty, "defaults")
+        check(r.place(1, at: 0, value: .quarter) == 1 && r.place(4, at: 1, value: .quarter) == 1
+              && r.place(5, at: 2, value: .half) == 2, "two quarters and a half")
+        check(r.rests(inMeasure: 0).isEmpty, "a full measure has no rests")
+        check(r.place(6, at: 6, value: .whole) == 2, "a whole note on beat 3 is shortened to the barline")
+        check(r.rests(inMeasure: 1) == [Composition.Rest(start: 4, beats: 2, glyph: .half)], "half rest on beat 1: \(r.rests(inMeasure: 1))")
+        check(r.place(2, at: 3, value: .quarter) == 1 && r.chord(covering: 2)?.beats == 1,
+              "a chord placed inside a ringing one cuts it short: \(r.chords)")
+        check(r.place(3, at: 5, value: .dottedHalf) == 1, "shortened to fit before the next chord")
+        r.setLength(ofChordAt: 5, to: .whole)
+        check(r.chord(covering: 5)?.beats == 1, "can't grow into the next chord")
+        r.removeChord(covering: 7)
+        r.setLength(ofChordAt: 5, to: .whole)
+        check(r.chord(covering: 5)?.beats == 3, "grows to the barline once there's room: \(r.chords)")
+        check(r.place(1, at: 16, value: .quarter) == nil && r.place(9, at: 0, value: .quarter) == nil, "out of range")
+
+        // Rests as they're written.
+        var q = Composition()
+        q.place(1, at: 1, value: .quarter)
+        check(q.rests(inMeasure: 0) == [.init(start: 0, beats: 1, glyph: .quarter), .init(start: 2, beats: 2, glyph: .half)],
+              "4/4, chord on beat 2: \(q.rests(inMeasure: 0))")
+        check(q.rests(inMeasure: 1) == [.init(start: 4, beats: 4, glyph: .whole)], "empty measure: whole rest")
+        q.setBeatsPerMeasure(3)
+        q.clearChords()
+        q.place(1, at: 0, value: .quarter)
+        check(q.rests(inMeasure: 0) == [.init(start: 1, beats: 1, glyph: .quarter), .init(start: 2, beats: 1, glyph: .quarter)],
+              "3/4, beats 2-3 are two quarter rests: \(q.rests(inMeasure: 0))")
+        check(q.rests(inMeasure: 1) == [.init(start: 3, beats: 3, glyph: .whole)], "empty 3/4 measure: whole rest")
+
+        // Meter and measure changes keep chords on their beats.
+        var m = Composition()
+        m.place(1, at: 0, value: .whole)
+        m.place(4, at: 4, value: .quarter)
+        m.place(5, at: 7, value: .quarter)
+        m.place(6, at: 8, value: .half)
+        m.setBeatsPerMeasure(3)
+        check(m.chords.map(\.start) == [0, 3, 6] && m.chords.map(\.beats) == [3, 1, 2] && m.chords.map(\.degree) == [1, 4, 6],
+              "4/4 → 3/4 drops beat 4, shortens the whole: \(m.chords)")
+        m.setBeatsPerMeasure(4)
+        check(m.chords.map(\.start) == [0, 4, 8], "3/4 → 4/4 keeps each chord in its measure: \(m.chords)")
+        m.setMeasureCount(2)
+        check(m.chords.map(\.start) == [0, 4], "fewer measures drop the end")
+        m.setMeasureCount(1)
+        check(m.measureCount == 2, "at least 2 measures")
+
+        // Every measure adds up, whatever the edits.
+        var fuzz = Composition()
+        for step in 0..<2000 {
+            switch Int.random(in: 0..<10) {
+            case 0: fuzz.setBeatsPerMeasure(Composition.meters.randomElement()!)
+            case 1: fuzz.setMeasureCount(Int.random(in: 1...9))
+            case 2: fuzz.removeChord(covering: Int.random(in: 0..<fuzz.totalBeats))
+            case 3: if let c = fuzz.chords.randomElement() { fuzz.setLength(ofChordAt: c.start, to: NoteValue.allCases.randomElement()!) }
+            default: fuzz.place(Int.random(in: 1...7), at: Int.random(in: 0..<fuzz.totalBeats), value: NoteValue.allCases.randomElement()!)
+            }
+            var ok = zip(fuzz.chords, fuzz.chords.dropFirst()).allSatisfy { $0.end <= $1.start }
+            for c in fuzz.chords {
+                ok = ok && (1...4).contains(c.beats) && c.end <= fuzz.totalBeats
+                    && c.start / fuzz.beatsPerMeasure == (c.end - 1) / fuzz.beatsPerMeasure
+            }
+            for measure in 0..<fuzz.measureCount {
+                let lo = measure * fuzz.beatsPerMeasure, hi = lo + fuzz.beatsPerMeasure
+                let chordBeats = fuzz.chords.filter { $0.start >= lo && $0.start < hi }.reduce(0) { $0 + $1.beats }
+                let restBeats = fuzz.rests(inMeasure: measure).reduce(0) { $0 + $1.beats }
+                ok = ok && chordBeats + restBeats == fuzz.beatsPerMeasure
+            }
+            if !ok { check(false, "step \(step): \(fuzz.meterName) \(fuzz.chords)"); break }
+        }
+
+        // Saving, and compositions saved before chords had their own lengths.
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        let saved = try! decoder.decode(Composition.self, from: encoder.encode(r))
+        check(saved == r, "saves and loads")
+        func legacy(_ value: String, _ slots: String, measures: Int) -> Composition {
+            let json = """
+            {"id":"\(UUID().uuidString)","name":"Old","keyRoot":0,"isMinor":false,"measureCount":\(measures),
+             "noteValue":"\(value)","slots":\(slots),"updatedAt":0}
+            """
+            return try! decoder.decode(Composition.self, from: Data(json.utf8))
+        }
+        let whole = legacy("whole", "[1,4,null,5]", measures: 4)
+        check(whole.beatsPerMeasure == 4 && whole.chords.map(\.start) == [0, 4, 12] && whole.chords.allSatisfy { $0.beats == 4 },
+              "old whole notes: \(whole.chords)")
+        let quarters = legacy("quarter", "[1,null,6,4,5,null,null,null]", measures: 2)
+        check(quarters.chords.map(\.start) == [0, 2, 3, 4] && quarters.chords.allSatisfy { $0.beats == 1 },
+              "old quarters: \(quarters.chords)")
+        let dotted = legacy("dottedHalf", "[1,4,5]", measures: 3)
+        check(dotted.beatsPerMeasure == 3 && dotted.chords.map(\.start) == [0, 3, 6] && dotted.chords.allSatisfy { $0.beats == 3 },
+              "old dotted halves become 3/4: \(dotted.chords)")
         print("ok   composition")
     }
 }
