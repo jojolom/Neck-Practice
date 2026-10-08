@@ -21,9 +21,9 @@ import TelemetryDeck
 
 enum Analytics {
 
-    /// The app's TelemetryDeck App ID (not a secret: it only lets the app send signals).
-    /// Empty turns analytics off.
-    private static let appID = ""
+    /// The app's TelemetryDeck App ID ("Guitar Man"; not a secret: it only lets the app send
+    /// signals). Empty turns analytics off.
+    private static let appID = "003DCE31-5584-4763-BF27-4FF171F6EAC9"
 
     private static var isEnabled = false
 
