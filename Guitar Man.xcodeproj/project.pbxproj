@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7D1E0A4E2F6B4A0100C0FFEE /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 7D1E0A4D2F6B4A0100C0FFEE /* TelemetryDeck */; };
 		2D307D5B1CE964C038026C3B /* ShieldConfiguration.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1287297C0BA3D8441FC5DF7 /* ShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 210EB0B79581857EBA3DA2E6 /* ShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E87EA69ECDC9D4854AE5AFB4 /* DeviceActivityMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -146,6 +147,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7D1E0A4E2F6B4A0100C0FFEE /* TelemetryDeck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,6 +271,7 @@
 			);
 			name = "Guitar Man";
 			packageProductDependencies = (
+				7D1E0A4D2F6B4A0100C0FFEE /* TelemetryDeck */,
 			);
 			productName = "Guitar Man";
 			productReference = B48FD5672F44170B004FBB1F /* Guitar Man.app */;
@@ -307,6 +310,9 @@
 			);
 			mainGroup = B48FD55E2F44170B004FBB1F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7D1E0A4C2F6B4A0100C0FFEE /* XCRemoteSwiftPackageReference "SwiftSDK" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B48FD5682F44170B004FBB1F /* Products */;
 			projectDirPath = "";
@@ -799,6 +805,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7D1E0A4C2F6B4A0100C0FFEE /* XCRemoteSwiftPackageReference "SwiftSDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TelemetryDeck/SwiftSDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.14.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7D1E0A4D2F6B4A0100C0FFEE /* TelemetryDeck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7D1E0A4C2F6B4A0100C0FFEE /* XCRemoteSwiftPackageReference "SwiftSDK" */;
+			productName = TelemetryDeck;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B48FD55F2F44170B004FBB1F /* Project object */;
 }

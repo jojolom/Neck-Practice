@@ -59,6 +59,7 @@ struct NeckPracticeApp: App {
                     UIApplication.shared.isIdleTimerDisabled = true
                     // Decode the guitar recordings in the background, ready for the first note.
                     GuitarSampleBank.preload()
+                    Analytics.start()
                 }
                 .onDisappear {
                     UIApplication.shared.isIdleTimerDisabled = false

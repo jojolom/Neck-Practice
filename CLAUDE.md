@@ -24,7 +24,7 @@ Source files keep their `NeckPractice*` prefix, and the Xcode project, target, a
 - `NeckPracticeApp.swift` — entry point; SwiftData container for `PracticeSessionLog`, injects `AudioSettings` via `.environment`.
 
 ## Stack
-Swift 5, SwiftUI, Observation (`@Observable`), SwiftData, AVFoundation, Accelerate (pitch detection), UserNotifications. iOS deployment target 26.2. No third-party dependencies.
+Swift 5, SwiftUI, Observation (`@Observable`), SwiftData, AVFoundation, Accelerate (pitch detection), UserNotifications. iOS deployment target 26.2. One third-party dependency: TelemetryDeck (Swift package, anonymous usage analytics), used only through `Analytics` in `NeckPracticeServicesAnalytics.swift`; its App ID lives there. If what's sent changes, update the privacy policy in `docs/index.html` and the App Store privacy label.
 
 ## Build & run
 ```bash

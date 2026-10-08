@@ -101,6 +101,28 @@ private enum Tool: Hashable {
     case circleOfFifths, scaleReference, modes, pentatonicShapes, romanNumerals, explorer
 }
 
+extension HomeRoute {
+    /// The screen's name in usage analytics.
+    var analyticsName: String {
+        switch self {
+        case .dailyPractice:        return "Daily Practice"
+        case .exercise(let title):  return title
+        case .tool(let tool):
+            switch tool {
+            case .tuner:            return "Tuner"
+            case .metronome:        return "Metronome"
+            case .looper:           return "Audio Looper"
+            case .circleOfFifths:   return "Circle of Fifths"
+            case .scaleReference:   return "Scale Reference"
+            case .modes:            return "Modes"
+            case .pentatonicShapes: return "Pentatonic Shapes"
+            case .romanNumerals:    return "Roman Numerals Reference"
+            case .explorer:         return "Fretboard Explorer"
+            }
+        }
+    }
+}
+
 struct HomeView: View {
 
     private let router = DeepLinkRouter.shared
@@ -263,6 +285,7 @@ struct HomeView: View {
                     }
                 }
                 .environment(\.providesNavigationStack, true)
+                .onAppear { Analytics.featureOpened(route.analyticsName) }
             }
             // A reminder was tapped (or its Start Now action): jump to Daily Practice.
             .onChange(of: router.pendingDailyPractice, initial: true) { _, pending in

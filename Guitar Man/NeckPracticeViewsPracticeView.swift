@@ -94,6 +94,8 @@ struct PracticeView: View {
         }
         .fullScreenCover(isPresented: $showingSession) {
             PracticeSessionView(plan: activePlan) { result in
+                Analytics.dailyPracticeEnded(stepsPlanned: activePlan.steps.count,
+                                             stepsCompleted: result.stepsCompleted, minutes: result.totalMinutes)
                 logSession(result: result)
                 showingSession = false
             }
@@ -180,6 +182,7 @@ struct PracticeView: View {
             }
 
             Button {
+                Analytics.dailyPracticeStarted(stepsPlanned: activePlan.steps.count)
                 showingSession = true
             } label: {
                 Label(practicedToday ? "Practice Again" : "Start Today's Practice",
