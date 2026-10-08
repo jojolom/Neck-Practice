@@ -36,6 +36,15 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.3",
+            released: "October 2026",
+            releasedOn: DateComponents(year: 2026, month: 10, day: 8),
+            items: [
+                ChangelogItem(symbol: "chart.bar", title: "Anonymous usage statistics",
+                              detail: "The app now counts, anonymously, how many people use it and which features they open, so we know what to improve next. Nothing personal is ever collected: no names, recordings, or compositions."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.2",
             released: "October 2026",
             releasedOn: DateComponents(year: 2026, month: 10, day: 6),
