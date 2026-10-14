@@ -37,6 +37,8 @@ struct IntervalView: View {
     @State private var locateResult: Bool? = nil
     @State private var isLocked = false
     @State private var isNewQuestionLocked = false
+    /// Holds each step's move on until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
 
     @Environment(AudioSettings.self) private var audioSettings
 
@@ -61,6 +63,8 @@ struct IntervalView: View {
                                 bonusArea(bonus)
                             }
                         }
+                        NextButton(gate: nextGate)
+                            .padding(.top, 8)
                     } else {
                         Text("No interval fits these settings.")
                             .foregroundStyle(.secondary)
@@ -242,7 +246,7 @@ struct IntervalView: View {
         let correct = session.answerInterval(choice)
         withAnimation(.easeInOut(duration: 0.2)) { revealAnswer = true }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + (correct ? 0.8 : 1.8)) {
+        nextGate.after(correct ? 0.8 : 1.8, correct: correct) {
             if correct {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     pickedChoice = nil
@@ -267,7 +271,7 @@ struct IntervalView: View {
         if audioSettings.isEnabled { AudioPlayer.shared.playNote(at: position) }
         withAnimation(.easeInOut(duration: 0.2)) { locateResult = correct }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + (correct ? 1.2 : 2.0)) {
+        nextGate.after(correct ? 1.2 : 2.0, correct: correct) {
             if session.bonus != nil {
                 withAnimation(.easeInOut(duration: 0.3)) { step = .bonus }
                 isLocked = false
@@ -283,13 +287,14 @@ struct IntervalView: View {
         pickedChoice = choice
         let correct = session.answerBonus(choice)
         withAnimation(.easeInOut(duration: 0.2)) { revealAnswer = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + (correct ? 0.9 : 1.8)) {
+        nextGate.after(correct ? 0.9 : 1.8, correct: correct) {
             session.advance()
         }
     }
 
     /// Resets the screen for the question the session just drew, and plays it.
     private func newQuestion() {
+        nextGate.cancel()
         step = .identify
         pickedChoice = nil
         revealAnswer = false
@@ -341,6 +346,8 @@ struct IntervalSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
                 Section {
                     Stepper(session.maxAccidentals == 0 ? "C major only"
                                                         : "Up to \(session.maxAccidentals) sharps or flats",

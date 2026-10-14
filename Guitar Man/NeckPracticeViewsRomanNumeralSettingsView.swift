@@ -13,6 +13,8 @@ struct RomanNumeralSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
                 Section {
                     Picker("Key", selection: $session.keyFilter) {
                         Text("All Keys").tag(Optional<Note>.none)

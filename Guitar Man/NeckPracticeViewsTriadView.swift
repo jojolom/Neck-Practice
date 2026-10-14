@@ -33,6 +33,8 @@ struct TriadView: View {
     @State private var step: AnswerStep = .quality
     @State private var answerResult: Bool? = nil
     @State private var isLocked       = false
+    /// Holds each step's move on until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
     @State private var showSettings   = false
     @State private var showRootHint   = false
     /// The correct quality, set after answering quality step to highlight the right button.
@@ -117,6 +119,8 @@ struct TriadView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
 
+                NextButton(gate: nextGate)
+
                 Spacer()
             }
             .navigationTitle("Triad Trainer")
@@ -142,6 +146,7 @@ struct TriadView: View {
                 lockForNewQuestion()
             }
             .onChange(of: session.currentQuestion?.shape.id) {
+                nextGate.cancel()
                 step               = .quality
                 answerResult       = nil
                 correctQuality     = nil
@@ -294,7 +299,7 @@ struct TriadView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 correctQuality = currentQuality
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 withAnimation {
                     correctQuality = nil
                     step           = .inversion(qualityWasCorrect: true)
@@ -307,7 +312,7 @@ struct TriadView: View {
                 correctQuality = currentQuality
                 wrongQuality   = quality
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            nextGate.after(1.5, correct: false) {
                 withAnimation {
                     correctQuality = nil
                     wrongQuality   = nil
@@ -329,7 +334,7 @@ struct TriadView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 correctInversion = currentInversion
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 refreshRootChoices()
                 withAnimation {
                     correctInversion = nil
@@ -343,7 +348,7 @@ struct TriadView: View {
                 correctInversion = currentInversion
                 wrongInversion   = inversion
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            nextGate.after(1.5, correct: false) {
                 refreshRootChoices()
                 withAnimation {
                     correctInversion = nil
@@ -363,7 +368,7 @@ struct TriadView: View {
         let q = session.currentQuestion
 
         if correct {
-            // Correct: root dot + root button turn green, play note, advance after 0.8s
+            // Correct: root dot + root button turn green, play note, then on to the next one
             if audioSettings.isEnabled, let q {
                 AudioPlayer.shared.playNote(at: q.rootPosition)
             }
@@ -371,7 +376,7 @@ struct TriadView: View {
                 answerResult = true         // label reveal in FretboardView
                 correctRoot  = q?.rootNote  // button turns green
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 withAnimation { answerResult = nil }
                 correctRoot = nil
                 isLocked = false
@@ -387,8 +392,8 @@ struct TriadView: View {
             if audioSettings.isEnabled, let q {
                 AudioPlayer.shared.playNote(at: q.rootPosition)
             }
-            // Hold for 1.5s so user absorbs the correct answer, then advance
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // Hold so the user absorbs the correct answer, then advance
+            nextGate.after(1.5, correct: false) {
                 withAnimation { answerResult = nil }
                 correctRoot = nil
                 wrongRoot   = nil
@@ -413,6 +418,7 @@ struct TriadView: View {
     }
 
     private func resetSession() {
+        nextGate.cancel()
         step               = .quality
         answerResult       = nil
         correctQuality     = nil

@@ -22,6 +22,8 @@ struct ModeQuizView: View {
     @State private var revealAnswer = false
     @State private var isLocked = false
     @State private var showSettings = false
+    /// Holds the move to the next question until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
 
     @Environment(AudioSettings.self) private var audioSettings
 
@@ -44,6 +46,8 @@ struct ModeQuizView: View {
 
                     if let q = session.currentQuestion {
                         question(q)
+                        NextButton(gate: nextGate)
+                            .padding(.top, 8)
                     }
                 }
                 .padding(.bottom, 24)
@@ -69,6 +73,7 @@ struct ModeQuizView: View {
             // Drawing a question bumps questionNumber, which resets the screen.
             .onAppear { session.start() }
             .onChange(of: session.questionNumber) {
+                nextGate.cancel()
                 picked = nil
                 revealAnswer = false
                 isLocked = false
@@ -153,7 +158,7 @@ struct ModeQuizView: View {
         picked = choice
         let correct = session.answer(choice)
         withAnimation(.easeInOut(duration: 0.2)) { revealAnswer = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + (correct ? 1.2 : 2.5)) {
+        nextGate.after(correct ? 1.2 : 2.5, correct: correct) {
             session.advance()
         }
     }
@@ -194,6 +199,8 @@ struct ModeQuizSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
                 Section {
                     Toggle("Name the Mode", isOn: $session.includeNameIt)
                     Toggle("Parent Major Key", isOn: $session.includeParentKey)

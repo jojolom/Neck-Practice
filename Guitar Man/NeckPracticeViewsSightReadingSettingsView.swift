@@ -13,6 +13,8 @@ struct SightReadingSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
                 Section("Fretboard") {
                     Stepper("Max Fret: \(session.maxFret)",
                             value: $session.maxFret, in: 3...12)

@@ -13,6 +13,8 @@ struct PentatonicSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
 
                 Section {
                     Picker("Quality", selection: $session.qualityFilter) {

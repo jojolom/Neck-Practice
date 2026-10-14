@@ -25,6 +25,8 @@ struct QuizView: View {
     @State private var wrongNote: Note? = nil
     /// True during the new-question lock period so the note can be heard first.
     @State private var isNewQuestionLocked = false
+    /// Holds the move to the next question until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
 
     @Environment(AudioSettings.self) private var audioSettings
 
@@ -104,6 +106,8 @@ struct QuizView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
+                NextButton(gate: nextGate)
+
                 Spacer()
             }
             .navigationTitle("Note Guesser")
@@ -117,6 +121,7 @@ struct QuizView: View {
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Restart", role: .destructive) {
+                        nextGate.cancel()
                         isNewQuestionLocked = false
                         isLocked = false
                         correctNote = nil
@@ -135,6 +140,7 @@ struct QuizView: View {
                 lockForNewQuestion()
             }
             .onChange(of: session.currentPosition) {
+                nextGate.cancel()
                 answerResult = nil
                 correctNote  = nil
                 wrongNote    = nil
@@ -166,7 +172,7 @@ struct QuizView: View {
         isLocked = true
 
         if correct {
-            // Correct: green dot + green button, advance after 0.8s
+            // Correct: green dot + green button, then on to the next one
             // Don't replay the note — they already heard it as the question.
             AudioPlayer.shared.stopAll()
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -174,7 +180,7 @@ struct QuizView: View {
                 correctNote  = pos?.note    // button turns green
                 answerFlash  = .green
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 withAnimation { answerFlash = .clear }
                 answerResult = nil
                 correctNote  = nil
@@ -192,8 +198,8 @@ struct QuizView: View {
                 correctNote  = pos?.note    // correct button turns green
                 wrongNote    = note         // tapped button turns red
             }
-            // Hold 1.5s so user sees and hears the correct answer, then advance
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // Hold so the user sees and hears the correct answer, then advance
+            nextGate.after(1.5, correct: false) {
                 withAnimation { answerFlash = .clear }
                 answerResult = nil
                 correctNote  = nil

@@ -23,6 +23,8 @@ struct SightReadingView: View {
     @State private var correctPositions: Set<FretboardPosition> = []
     @State private var isLocked = false
     @State private var isNewQuestionLocked = false
+    /// Holds the move to the next note until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
 
     @Environment(AudioSettings.self) private var audioSettings
 
@@ -85,22 +87,27 @@ struct SightReadingView: View {
 
                 Divider()
 
-                // ── Submit button ────────────────────────────────
-                Button {
-                    submitAnswer()
-                } label: {
-                    Text("Submit")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(selectedPosition != nil && !isLocked
-                                    ? Color.accentColor : Color.gray.opacity(0.4))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                // ── Submit button (Next, once answered) ──────────
+                if nextGate.isWaiting {
+                    NextButton(gate: nextGate)
+                        .padding(.vertical, 6)
+                } else {
+                    Button {
+                        submitAnswer()
+                    } label: {
+                        Text("Submit")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(selectedPosition != nil && !isLocked
+                                        ? Color.accentColor : Color.gray.opacity(0.4))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(selectedPosition == nil || isLocked)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
-                .disabled(selectedPosition == nil || isLocked)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
 
                 Spacer()
             }
@@ -115,6 +122,7 @@ struct SightReadingView: View {
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Restart", role: .destructive) {
+                        nextGate.cancel()
                         resetState()
                         withAnimation { session.reset() }
                     }
@@ -128,6 +136,7 @@ struct SightReadingView: View {
                 playCurrentNote()
             }
             .onChange(of: session.currentPitch) {
+                nextGate.cancel()
                 selectedPosition = nil
                 answerResult = nil
                 correctPositions = []
@@ -154,7 +163,7 @@ struct SightReadingView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 answerResult = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 resetState()
                 session.advance()
             }
@@ -163,7 +172,7 @@ struct SightReadingView: View {
                 answerResult = false
                 correctPositions = session.validPositions
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            nextGate.after(1.5, correct: false) {
                 resetState()
                 session.advance()
             }

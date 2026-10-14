@@ -14,6 +14,7 @@ struct TriadSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
 
                 Section {
                     // String group filter

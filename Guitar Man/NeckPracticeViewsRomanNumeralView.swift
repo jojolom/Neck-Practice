@@ -24,7 +24,8 @@ struct RomanNumeralView: View {
     @State private var choices: [String] = []
     @State private var correctChoice: String? = nil
     @State private var wrongChoice: String? = nil
-    @State private var showNext = false
+    /// Holds the move to the next question until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
 
     var body: some View {
         NavigationContainer {
@@ -73,24 +74,7 @@ struct RomanNumeralView: View {
                             .padding(.horizontal, 16)
                             .padding(.top, 8)
 
-                        // ── Next button (appears after feedback delay) ──
-                        if showNext {
-                            Button {
-                                advanceToNext()
-                            } label: {
-                                Text("Next")
-                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(Color.accentColor)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 6)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
+                        NextButton(gate: nextGate)
                     }
                     .padding(.bottom, 20)
                 }
@@ -225,11 +209,8 @@ struct RomanNumeralView: View {
             if !correct { wrongChoice = choice }
         }
 
-        // Show Next button after a brief delay so user can see the feedback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                showNext = true
-            }
+        nextGate.after(correct ? 1.0 : 2.0, correct: correct) {
+            advanceToNext()
         }
     }
 
@@ -239,7 +220,6 @@ struct RomanNumeralView: View {
             correctChoice = nil
             wrongChoice = nil
             isLocked = false
-            showNext = false
         }
         session.advance()
         choices = session.generateChoices()
@@ -250,7 +230,7 @@ struct RomanNumeralView: View {
         correctChoice = nil
         wrongChoice = nil
         isLocked = false
-        showNext = false
+        nextGate.cancel()
         session.reset()
         choices = session.generateChoices()
     }

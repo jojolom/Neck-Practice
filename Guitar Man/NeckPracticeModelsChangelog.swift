@@ -50,6 +50,8 @@ enum Changelog {
                               detail: "Begin from the pop progression, a jazz ii–V–I, a 12-bar blues and more, in any key. Compositions can now run to 16 measures."),
                 ChangelogItem(symbol: "arrow.uturn.backward", title: "Quicker editing",
                               detail: "Undo and Redo, copy a measure into the next one, or clear it."),
+                ChangelogItem(symbol: "hand.raised", title: "Take your time",
+                              detail: "After you answer, the games now wait for you to tap Next, so you can take in the answer first. Prefer the old pace? Choose After Answering in any game's Settings."),
                 ChangelogItem(symbol: "book", title: "How to Compose",
                               detail: "A full guide to Compose, from Roman numerals to borrowed chords, in its ⋯ menu."),
                 ChangelogItem(symbol: "arrow.left.arrow.right", title: "Scale Study string pairs",

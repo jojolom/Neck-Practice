@@ -25,6 +25,8 @@ struct PentatonicView: View {
     @State private var answerResult: Bool? = nil
     @State private var isLocked     = false
     @State private var showSettings  = false
+    /// Holds each step's move on until Next is tapped (see AnswerPacing).
+    @State private var nextGate = NextGate()
     @State private var showRootDots  = false
     /// Dots the user has tapped during the selectRoots step.
     @State private var selectedDots: Set<FretboardPosition> = []
@@ -113,6 +115,8 @@ struct PentatonicView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
 
+                NextButton(gate: nextGate)
+
                 Spacer()
             }
             .navigationTitle("Pentatonic Trainer")
@@ -194,19 +198,22 @@ struct PentatonicView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Button {
-                    handleRootsSubmit()
-                } label: {
-                    Text("Submit")
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(selectedDots.isEmpty ? Color.gray.opacity(0.4) : Color.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                // Once submitted, Next (under the answer area) takes its place.
+                if !nextGate.isWaiting {
+                    Button {
+                        handleRootsSubmit()
+                    } label: {
+                        Text("Submit")
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(selectedDots.isEmpty ? Color.gray.opacity(0.4) : Color.accentColor)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedDots.isEmpty || isLocked)
                 }
-                .buttonStyle(.plain)
-                .disabled(selectedDots.isEmpty || isLocked)
             }
 
         case .root:
@@ -257,8 +264,7 @@ struct PentatonicView: View {
             answerResult = correct
         }
 
-        let delay: Double = correct ? 0.8 : 1.5
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        nextGate.after(correct ? 0.8 : 1.5, correct: correct) {
             refreshRootChoices()
             withAnimation {
                 answerResult = nil
@@ -281,7 +287,7 @@ struct PentatonicView: View {
                 answerResult = true
                 correctRoot  = q?.effectiveRootNote
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            nextGate.after(0.8, correct: true) {
                 answerResult = nil
                 correctRoot  = nil
                 showRootDots = false
@@ -296,7 +302,7 @@ struct PentatonicView: View {
                 correctRoot  = q?.effectiveRootNote
                 wrongRoot    = note
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            nextGate.after(1.5, correct: false) {
                 answerResult = nil
                 correctRoot  = nil
                 wrongRoot    = nil
@@ -321,6 +327,7 @@ struct PentatonicView: View {
     }
 
     private func resetSession() {
+        nextGate.cancel()
         answerResult      = nil
         selectedDots      = []
         correctRoot       = nil

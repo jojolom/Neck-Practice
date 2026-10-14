@@ -14,6 +14,8 @@ struct QuizSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AnswerPacingSection()
+
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
