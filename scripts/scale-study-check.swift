@@ -2,9 +2,10 @@
 //  scale-study-check.swift
 //
 //  Offline check for Scale Study (ScaleStudySession): every round chains starting scale →
-//  relative → parallel → relative on strings X, Y, Y, X, with one major and one minor scale per
+//  relative → parallel → relative on strings X, X, Y, Y, with one major and one minor scale per
 //  string; every root sits between frets 2 and 12 (no open-string positions); rounds still
-//  cover every starting key; and no rhythm/tempo, random or fixed (including an out-of-range
+//  cover every starting key that fits (20 of 24: Db major, D minor, G minor and Ab major would
+//  put F or Bb at fret 1); and no rhythm/tempo, random or fixed (including an out-of-range
 //  Daily Practice override), goes over 3 notes a second.
 //
 //  Run from the repo root:
@@ -40,8 +41,8 @@ struct ScaleStudyCheck {
             let r = session.round
             guard r.count == 4 else { check(false, "round has \(r.count) scales"); return }
             startingKeys.insert(r[0].fullLabel)
-            let x = r[0].string, y = r[1].string
-            check(r.map(\.string) == [x, y, y, x] && x != y, "strings X Y Y X: \(r.map(\.string))")
+            let x = r[0].string, y = r[2].string
+            check(r.map(\.string) == [x, x, y, y] && x != y, "strings X X Y Y: \(r.map(\.string))")
             for string in [5, 6] {
                 let on = r.filter { $0.string == string }
                 check(on.count == 2 && on.filter(\.isMajor).count == 1, "one major and one minor on string \(string)")
@@ -58,8 +59,10 @@ struct ScaleStudyCheck {
             }
             if failures > 20 { return }
         }
-        check(startingKeys.count == 24, "every major and minor key can start a round (\(startingKeys.count) of 24)")
-        print("ok   rounds: theory chain, X-Y-Y-X strings, roots on frets 2–12, all 24 starting keys")
+        let unfit: Set = ["Db Major", "D Minor", "G Minor", "Ab Major"]
+        check(startingKeys.count == 20 && startingKeys.isDisjoint(with: unfit),
+              "every key that fits can start a round (\(startingKeys.count) of 20: \(startingKeys.intersection(unfit)))")
+        print("ok   rounds: theory chain, X-X-Y-Y strings, roots on frets 2–12, all 20 starting keys that fit")
     }
 
     static func checkTempos() {

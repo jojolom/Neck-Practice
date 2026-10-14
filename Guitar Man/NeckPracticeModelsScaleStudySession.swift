@@ -3,8 +3,8 @@
 //  Neck Practice
 //
 //  Manages the 4-scale study cycle: start → relative → parallel → relative.
-//  Strings follow a 6-5-5-6 or 5-6-6-5 pattern (X, Y, Y, X): the relative moves to
-//  the opposite string, the parallel stays on the same string as the scale before it.
+//  Strings follow a 5-5-6-6 or 6-6-5-5 pattern (X, X, Y, Y): the relative stays on the
+//  same string as the scale before it, the parallel moves to the other string.
 //  Keys are chosen so every scale's root sits between frets 2 and 12 on its string (no
 //  open-string positions). Tempos keep every rhythm at or under 3 notes a second.
 //  Integrates rhythm assignment, BPM selection, and theory quizzing.
@@ -249,10 +249,10 @@ final class ScaleStudySession {
         }
         let entries = candidates.randomElement()
             ?? Self.chain(startRoot: .c, startMajor: true, startString: 5)
-        let x = entries[0].string, y = entries[1].string
+        let x = entries[0].string, y = entries[2].string
 
         #if DEBUG
-        assert(entries.map(\.string) == [x, y, y, x], "String pattern must be X, Y, Y, X")
+        assert(entries.map(\.string) == [x, x, y, y], "String pattern must be X, X, Y, Y")
         for string in [5, 6] {
             let onString = entries.filter { $0.string == string }
             assert(onString.count == 2 && onString.filter(\.isMajor).count == 1,
@@ -264,7 +264,7 @@ final class ScaleStudySession {
     }
 
     /// Starting scale → its relative → that one's parallel → that one's relative, on strings
-    /// X, Y, Y, X.
+    /// X, X, Y, Y.
     static func chain(startRoot: Note, startMajor: Bool, startString x: Int) -> [ScaleEntry] {
         let y = x == 6 ? 5 : 6
         func relative(of scale: ScaleEntry, string: Int) -> ScaleEntry {
@@ -273,9 +273,9 @@ final class ScaleStudySession {
                 : ScaleEntry(root: scale.root.relativeMajor, isMajor: true, relationship: "Relative Major", string: string)
         }
         let first = ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale", string: x)
-        let second = relative(of: first, string: y)
+        let second = relative(of: first, string: x)
         let third = ScaleEntry(root: second.root, isMajor: !second.isMajor,
                                relationship: second.isMajor ? "Parallel Minor" : "Parallel Major", string: y)
-        return [first, second, third, relative(of: third, string: x)]
+        return [first, second, third, relative(of: third, string: y)]
     }
 }
