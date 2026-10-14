@@ -2,9 +2,9 @@
 //  CompositionPlayer.swift
 //  Guitar Man
 //
-//  Plays a composition aloud. Compose is meant to be played by the student, so this is a
-//  hidden option: in the Compose editor, tap "Key" five times quickly to show the Playback
-//  settings, whose "Hear Compositions" toggle adds a speaker button next to Play Along.
+//  Plays a composition aloud. Compose is meant to be played by the student, so it's off until
+//  Hear Compositions is turned on in Compose Settings (the editor's ⋯ menu); then a speaker
+//  button next to Play Along plays it.
 //
 //  Each chord sounds once, on its beat, and rings for its length (rests are silent): its notes
 //  either all at once or as an arpeggio (low to high, an eighth note apart, each left ringing).
@@ -36,8 +36,7 @@ enum CompositionPlaybackStyle: String, CaseIterable, Identifiable {
 @Observable
 final class CompositionPlayer {
 
-    /// UserDefaults keys for the hidden Playback settings in the Compose editor.
-    static let unlockedKey = "compose.playbackSettingsUnlocked"
+    /// UserDefaults keys for Hear Compositions in Compose Settings.
     static let enabledKey = "compose.hearPlayback"
     static let styleKey = "compose.playbackStyle"
     static let tempoKey = "compose.playbackBPM"

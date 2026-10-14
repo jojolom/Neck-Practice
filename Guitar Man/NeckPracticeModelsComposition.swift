@@ -9,7 +9,7 @@
 //  Melody notes are single pitches from an eighth to a whole note, on any eighth. Each line
 //  keeps the same rules on its own: nothing crosses a barline or overlaps, so something that
 //  wouldn't fit is shortened to fit, and the gaps are rests, so every measure always adds up.
-//  The student plays it (the app only plays it with the hidden option in CompositionPlayer).
+//  The student plays it (the app plays it too with Hear Compositions on: see CompositionPlayer).
 //
 //  Saved compositions live in UserDefaults as JSON, like practice plans; ones saved before
 //  chords had their own lengths, or before chord kinds and melodies, load as the same music.

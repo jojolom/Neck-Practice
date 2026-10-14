@@ -44,6 +44,10 @@ enum Changelog {
                               detail: "A backing track to practise your soloing over. Pick a key and up to four chords, or the 12-bar blues, choose a style from fingerpicked to funk, and solo along with the pentatonic box it shows, in any of its five positions."),
                 ChangelogItem(symbol: "music.note.list", title: "21 grooves to jam over",
                               detail: "Presets from Spanish Nights and Rock Anthem to Slow Blues, Island Reggae and a bossa ii–V–I, each playable in any key."),
+                ChangelogItem(symbol: "speaker.wave.2", title: "Hear your compositions",
+                              detail: "Turn on Hear Compositions in Compose Settings (the ⋯ menu) and a speaker button plays your piece on the guitar, chords and melody, before you play along."),
+                ChangelogItem(symbol: "sparkles.rectangle.stack", title: "A tour of Compose",
+                              detail: "A quick walkthrough lights up each part of the editor. It opens when you start Compose until you turn it off, and you can take it again from Compose Settings."),
             ]
         ),
         ChangelogEntry(

@@ -11,11 +11,13 @@
 //  row goes to borrowed and secondary chords (♭VII, iv, V/V…); and the Chords | Melody switch
 //  swaps the numerals for the key's notes. Long-press a chord or note on the staff to change
 //  its length or inversion, see where to play it, or duplicate or clear its measure; Undo,
-//  Redo and the How to Compose guide (ComposeGuideView) are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
+//  Redo, the How to Compose guide (ComposeGuideView) and Compose Settings are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
 //  notes, with the chords named above and numbered below.
 //
 //  You play it, optionally with Play Along listening and marking each chord (or note) green.
-//  (Hidden Playback settings add a speaker button that plays it — see CompositionPlayer.)
+//  Hear Compositions, in Compose Settings, adds a speaker button that plays it (see
+//  CompositionPlayer). A tour (ComposeWalkthrough) lights up each part the first time a
+//  composition is opened each launch, until it's turned off.
 //  Compositions save automatically once they have something in them.
 //
 
@@ -173,16 +175,17 @@ struct CompositionEditorView: View {
     @State private var future: [Composition] = []
     @State private var isRestoring = false
 
-    /// Hidden Playback settings (tap "Key" five times quickly): a speaker button that plays the
-    /// composition, its chords all at once or arpeggiated.
-    @AppStorage(CompositionPlayer.unlockedKey) private var playbackSettingsUnlocked = false
+    /// Hear Compositions (in Compose Settings): a speaker button that plays the composition,
+    /// its chords all at once or arpeggiated.
     @AppStorage(CompositionPlayer.enabledKey) private var hearPlayback = false
     @AppStorage(CompositionPlayer.styleKey) private var playbackStyle: CompositionPlaybackStyle = .together
     @AppStorage(CompositionPlayer.tempoKey) private var playbackTempo = CompositionPlayer.defaultTempo
     @Environment(\.scenePhase) private var scenePhase
     @State private var player = CompositionPlayer()
-    @State private var keyTaps = 0
-    @State private var lastKeyTap = Date.distantPast
+    @State private var showSettings = false
+    /// The tour's step while it's showing (see ComposeTour).
+    @State private var tourStep: Int? = nil
+    @AppStorage(ComposeTour.enabledKey) private var tourEnabled = true
 
     init(composition: Composition, store: CompositionStore) {
         self.store = store
@@ -191,29 +194,42 @@ struct CompositionEditorView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                settingsCard
+            ScrollViewReader { scroller in
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsCard
+                        .composeTourTarget(.settings)
+                        .id(ComposeTourTarget.settings)
 
-                CompositionStaffView(
-                    composition: composition,
-                    editingMelody: mode == .melody,
-                    chordColors: player.playingChord.map { [$0: Color.accentColor] } ?? [:],
-                    noteColors: player.playingNote.map { [$0: Color.accentColor] } ?? [:],
-                    targetedSlot: targetedSlot,
-                    editing: editing
-                )
-                .padding(.horizontal, 12)
+                    CompositionStaffView(
+                        composition: composition,
+                        editingMelody: mode == .melody,
+                        chordColors: player.playingChord.map { [$0: Color.accentColor] } ?? [:],
+                        noteColors: player.playingNote.map { [$0: Color.accentColor] } ?? [:],
+                        targetedSlot: targetedSlot,
+                        editing: editing
+                    )
+                    .padding(.horizontal, 12)
+                    .composeTourTarget(.staff)
+                    .id(ComposeTourTarget.staff)
 
-                palette
+                    palette
 
-                Text(mode == .chords
-                     ? "Drag a numeral onto a beat, or tap it and then tap the beat. Tap a numeral for its 7th and other versions; swipe the numerals for borrowed chords. Long-press a chord on the staff to change it, see where to play it, or copy its measure."
-                     : "Pick a note, then tap where it goes: each beat splits in two for eighth notes. Long-press a note on the staff to change its length or remove it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
+                    Text(mode == .chords
+                         ? "Drag a numeral onto a beat, or tap it and then tap the beat. Tap a numeral for its 7th and other versions; swipe the numerals for borrowed chords. Long-press a chord on the staff to change it, see where to play it, or copy its measure."
+                         : "Pick a note, then tap where it goes: each beat splits in two for eighth notes. Long-press a note on the staff to change its length or remove it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
+                }
+                .padding(.vertical, 12)
+                // The tour scrolls each part it lights up into view.
+                .onChange(of: tourStep) { _, step in
+                    let steps = ComposeTour.steps(hearPlayback: hearPlayback)
+                    guard let step, steps.indices.contains(step), let target = steps[step].target,
+                          target != .playAlong else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { scroller.scrollTo(target, anchor: .center) }
+                }
             }
-            .padding(.vertical, 12)
         }
         // "Shortened to fit", floating just above the buttons so it's seen wherever you've scrolled.
         .overlay(alignment: .bottom) {
@@ -231,6 +247,26 @@ struct CompositionEditorView: View {
         }
         .animation(.spring(duration: 0.3), value: hint)
         .safeAreaInset(edge: .bottom) { bottomBar }
+        .overlayPreferenceValue(ComposeTourAnchors.self) { anchors in
+            ComposeWalkthroughOverlay(steps: ComposeTour.steps(hearPlayback: hearPlayback), step: $tourStep,
+                                      anchors: anchors) { keepShowing in
+                tourEnabled = keepShowing
+                tourStep = nil
+            }
+        }
+        .toolbar(tourStep == nil ? .automatic : .hidden, for: .navigationBar)
+        .onAppear {
+            // The tour opens with the first composition opened since the app launched.
+            guard tourEnabled, !ComposeTour.shownThisLaunch else { return }
+            ComposeTour.shownThisLaunch = true
+            startTour(after: 0.5)
+        }
+        .sheet(isPresented: $showSettings) {
+            ComposeSettingsView {
+                showSettings = false
+                startTour(after: 0.6)
+            }
+        }
         // Playback is of what's on screen as it's set up now: any change stops it.
         .onDisappear { player.stop() }
         .onChange(of: playbackStyle) { player.stop() }
@@ -315,9 +351,17 @@ struct CompositionEditorView: View {
             }
             .disabled(composition.isEmpty)
         }
+        .composeTourTarget(.playAlong)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.bar)
+    }
+
+    private func startTour(after delay: TimeInterval) {
+        mode = .chords
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            withAnimation { tourStep = 0 }
+        }
     }
 
     private var moreMenu: some View {
@@ -326,6 +370,11 @@ struct CompositionEditorView: View {
                 showGuide = true
             } label: {
                 Label("How to Compose", systemImage: "book")
+            }
+            Button {
+                showSettings = true
+            } label: {
+                Label("Compose Settings", systemImage: "gearshape")
             }
             Section {
                 Button {
@@ -388,9 +437,6 @@ struct CompositionEditorView: View {
             HStack {
                 Text("Key")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .contentShape(Rectangle())
-                    .onTapGesture { tapKeyLabel() }
-                    .sensoryFeedback(.success, trigger: playbackSettingsUnlocked)
                 Spacer()
                 Picker("Key", selection: Binding(
                     get: { composition.keyRoot },
@@ -430,61 +476,11 @@ struct CompositionEditorView: View {
                 set: { composition.setMeasureCount($0) }
             ), in: Composition.measureRange)
             .font(.system(size: 15, weight: .semibold, design: .rounded))
-
-            if playbackSettingsUnlocked {
-                playbackSettings
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
         .padding(16)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
-    }
-
-    /// The hidden Playback settings.
-    private var playbackSettings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Divider()
-            Toggle(isOn: $hearPlayback) {
-                Label("Hear Compositions", systemImage: "speaker.wave.2")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-            }
-            if hearPlayback {
-                HStack(spacing: 10) {
-                    Picker("Playback Style", selection: $playbackStyle) {
-                        ForEach(CompositionPlaybackStyle.allCases) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 190)
-                    Spacer(minLength: 0)
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(playbackTempo)")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                        Text("BPM")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                    .fixedSize()
-                    Stepper("Tempo", value: $playbackTempo, in: CompositionPlayer.tempoRange, step: 5)
-                        .labelsHidden()
-                        .accessibilityValue("\(playbackTempo) beats per minute")
-                }
-            }
-        }
-    }
-
-    /// Five taps on "Key", each within a second of the last, shows or hides the Playback settings.
-    private func tapKeyLabel() {
-        let now = Date()
-        keyTaps = now.timeIntervalSince(lastKeyTap) < 1 ? keyTaps + 1 : 1
-        lastKeyTap = now
-        guard keyTaps >= 5 else { return }
-        keyTaps = 0
-        withAnimation(.spring(duration: 0.3)) { playbackSettingsUnlocked.toggle() }
     }
 
     private func keyLabel(_ note: Note) -> String {
@@ -506,6 +502,8 @@ struct CompositionEditorView: View {
             .frame(maxWidth: 220)
             .padding(.horizontal, 16)
             .padding(.bottom, 2)
+            .composeTourTarget(.mode)
+            .id(ComposeTourTarget.mode)
 
             switch mode {
             case .chords: chordPalette
@@ -574,6 +572,8 @@ struct CompositionEditorView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 58)
+            .composeTourTarget(.palette)
+            .id(ComposeTourTarget.palette)
 
             if let slot = selectedSlot, variants(of: slot).count > 1 {
                 variantChips(slot)
@@ -589,6 +589,8 @@ struct CompositionEditorView: View {
             .padding(.horizontal, 16)
             .padding(.top, 2)
             .accessibilityHint("The length of the next chord you place")
+            .composeTourTarget(.length)
+            .id(ComposeTourTarget.length)
         }
         .animation(.easeInOut(duration: 0.2), value: selectedSlot)
         // A whole note doesn't fit in 3/4.

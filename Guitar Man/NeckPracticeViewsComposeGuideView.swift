@@ -5,8 +5,7 @@
 //  How to Compose: the in-depth guide behind the Compose editor's ⋯ menu. Every feature of
 //  the editor, the theory behind it (Roman numerals, 7ths, borrowed and secondary chords,
 //  inversions), Play Along, and some ideas to try. The examples are drawn with the same staff
-//  and chord-chart views the editor uses, so they always match. (The hidden Playback settings
-//  are left out on purpose.)
+//  and chord-chart views the editor uses, so they always match.
 //
 
 import SwiftUI
@@ -42,6 +41,7 @@ struct ComposeGuideView: View {
                     melody
                     editing
                     playAlong
+                    hearIt
                     templates
                     ideas
                 }
@@ -64,6 +64,7 @@ struct ComposeGuideView: View {
             GuideText("At the top, pick the **key** (and major or minor), the **time** — 4/4 or 3/4 — and how many **measures**, from 2 to 16.")
             GuideText("Chords are written as Roman numerals, which say where a chord sits in the key rather than its letter name. So when you change the key, the whole piece moves with it: I–IV–V in C is C, F, G; in G it's G, C, D.")
             GuideText("Everything saves on its own as soon as there's something on the staff. Your compositions are listed on the Compose screen; swipe one left to delete it.")
+            GuideText("A short tour of the editor opens the first time you open a composition after starting the app. Turn it off, or take it again, in **Compose Settings**.")
         }
     }
 
@@ -176,6 +177,13 @@ struct ComposeGuideView: View {
                 "For a melody, play one note at a time and let it ring. Moving to a new note is enough; play a repeated note again.",
                 "The bars at the bottom show what the mic hears, note by note: the notes it's waiting for are in blue.",
             ])
+        }
+    }
+
+    private var hearIt: some View {
+        GuideSection(symbol: "speaker.wave.2", title: "Hearing your composition") {
+            GuideText("Turn on **Hear Compositions** in **Compose Settings** (in the **⋯** menu) and a speaker button appears next to Play Along. It plays your piece on the guitar, its chords all at once or as arpeggios, with the melody on top, at the tempo you set there.")
+            GuideText("Listen first, then play along: it's a good way to check a progression sounds the way you meant.")
         }
     }
 
