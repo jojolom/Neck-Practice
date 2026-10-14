@@ -294,6 +294,15 @@ struct SoloPreset: Identifiable {
         case minor = "Minor Keys"
         case blues = "Blues"
         case major = "Major Keys"
+
+        /// For a three-way switch: "Minor", "Blues", "Major".
+        var shortName: String {
+            switch self {
+            case .minor: return "Minor"
+            case .blues: return "Blues"
+            case .major: return "Major"
+            }
+        }
     }
 
     let id: String

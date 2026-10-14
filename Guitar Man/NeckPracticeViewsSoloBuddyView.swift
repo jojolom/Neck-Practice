@@ -6,7 +6,8 @@
 //  start from a preset, and it plays a backing to solo over on the nylon guitar. The card at the
 //  top shows the chord you're on and the next one; the fretboard under it shows the pentatonic
 //  box to solo with, any of its five positions; chords and settings come after. Chords are Roman numerals (as in
-//  Compose), so a preset or your own progression plays in any key. The groove is remembered.
+//  Compose), so a preset or your own progression plays in any key. Presets are cards to swipe
+//  through at the top (Grooves), a group at a time. The groove is remembered.
 //
 
 import SwiftUI
@@ -20,7 +21,8 @@ struct SoloBuddyView: View {
     @AppStorage("soloBuddy.countIn") private var countsIn = true
     @AppStorage("soloBuddy.click") private var clicks = false
     @AppStorage("soloBuddy.position") private var position = 1
-    @State private var showPresets = false
+    /// Which presets the Grooves row shows.
+    @State private var presetGroup: SoloPreset.Group = .minor
     /// The chord slot being picked (an index, or `chords.count` for a new one).
     @State private var pickingSlot: Int? = nil
     @Environment(\.scenePhase) private var scenePhase
@@ -29,7 +31,8 @@ struct SoloBuddyView: View {
         NavigationContainer {
             ScrollView {
                 VStack(spacing: 16) {
-                    // What you need while soloing first: the chord you're on and the box.
+                    presetPicker
+                    // What you need while soloing: the chord you're on and the box.
                     nowPlaying
                     scaleCard
                     chordRow
@@ -40,21 +43,6 @@ struct SoloBuddyView: View {
             .safeAreaInset(edge: .bottom) { playBar }
             .navigationTitle("Solo Buddy")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showPresets = true
-                    } label: {
-                        Label("Presets", systemImage: "music.note.list")
-                    }
-                }
-            }
-            .sheet(isPresented: $showPresets) {
-                SoloPresetList { preset in
-                    groove = preset.groove
-                    showPresets = false
-                }
-            }
             .sheet(item: Binding(get: { pickingSlot.map(ChordSlot.init) }, set: { pickingSlot = $0?.index })) { slot in
                 SoloChordPicker(groove: groove, slot: slot.index) { symbol in
                     setChord(symbol, at: slot.index)
@@ -64,6 +52,7 @@ struct SoloBuddyView: View {
                 .presentationDetents([.medium, .large])
             }
             .onAppear {
+                presetGroup = SoloPreset.preset(groove.presetID)?.group ?? presetGroup
                 track.groove = groove
                 track.countsIn = countsIn
                 track.clicks = clicks
@@ -96,6 +85,89 @@ struct SoloBuddyView: View {
         var id: Int { index }
     }
 
+    // MARK: - Grooves
+
+    /// The presets as cards to swipe through, a group at a time; the one playing is outlined.
+    /// Picking one while it plays changes the backing at the next bar.
+    private var presetPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Grooves")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                Spacer()
+                Picker("Group", selection: $presetGroup.animation(.easeInOut(duration: 0.2))) {
+                    ForEach(SoloPreset.Group.allCases, id: \.self) { group in
+                        Text(group.shortName).tag(group)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 210)
+            }
+            .padding(.horizontal, 20)
+
+            ScrollViewReader { scroller in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 10) {
+                        ForEach(SoloPreset.all.filter { $0.group == presetGroup }) { preset in
+                            presetCard(preset)
+                                .id(preset.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .padding(.horizontal, 16)
+                }
+                .scrollTargetBehavior(.viewAligned)
+                .onAppear {
+                    if let id = groove.presetID { scroller.scrollTo(id, anchor: .leading) }
+                }
+            }
+        }
+    }
+
+    private func presetCard(_ preset: SoloPreset) -> some View {
+        let isOn = groove.presetID == preset.id
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { groove = preset.groove }
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text(preset.groove.style.displayName.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(isOn ? Color.accentColor : .secondary)
+                    Spacer()
+                    if isOn {
+                        Image(systemName: track.isPlaying ? "speaker.wave.2.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                Text(preset.name)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(preset.detail)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+                Spacer(minLength: 0)
+                Text("\(preset.groove.keyName) · \(preset.groove.bpm) BPM")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .frame(width: 210, height: 128, alignment: .topLeading)
+            .background(isOn ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isOn ? Color.accentColor : Color.clear, lineWidth: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(preset.name), \(preset.groove.style.displayName). \(preset.detail) \(preset.groove.keyName), \(preset.groove.bpm) beats per minute. Solo with \(preset.groove.scaleName).")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
     // MARK: - Now playing
 
     private var nowPlaying: some View {
@@ -110,7 +182,7 @@ struct SoloBuddyView: View {
                 .foregroundStyle(.secondary)
             if track.isCountingIn {
                 Text("\(track.beat + 1)")
-                    .font(.system(size: 54, weight: .bold, design: .rounded))
+                    .font(.system(size: 46, weight: .bold, design: .rounded))
                     .monospacedDigit()
                 Text("Get ready…")
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
@@ -118,7 +190,7 @@ struct SoloBuddyView: View {
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(current.name)
-                        .font(.system(size: 54, weight: .bold, design: .rounded))
+                        .font(.system(size: 46, weight: .bold, design: .rounded))
                     Text(current.romanNumeral)
                         .font(.system(size: 22, weight: .bold, design: .serif))
                         .foregroundStyle(.secondary)
@@ -131,7 +203,7 @@ struct SoloBuddyView: View {
             beatDots
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, 14)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
@@ -397,6 +469,16 @@ struct SoloBuddyView: View {
         return PentatonicQuestion(shape: allPentatonicShapes[index], quality: groove.scale, key: groove.keyRoot)
     }
 
+    /// The neck is drawn to the highest fret any box in this key reaches, so it keeps one
+    /// width: changing position then scrolls the new box fully into view (a neck that grew
+    /// with the box cut the scroll short).
+    private var neckFrets: Int {
+        let highest = allPentatonicShapes.map {
+            PentatonicQuestion(shape: $0, quality: groove.scale, key: groove.keyRoot).maxFret
+        }.max() ?? 12
+        return max(highest, 12)
+    }
+
     private var scaleCard: some View {
         let box = self.box
         return VStack(alignment: .leading, spacing: 10) {
@@ -436,7 +518,7 @@ struct SoloBuddyView: View {
             FretboardView(
                 highlightedPositions: Set(box.shapePositions),
                 rootPositions: box.effectiveRootPositions,
-                maxFret: max(box.maxFret, 5),
+                maxFret: neckFrets,
                 showHighlightedLabels: true,
                 keyContext: FretboardView.KeyContext(root: box.effectiveRootNote, isMinor: groove.scale.isMinor)
             )
@@ -557,62 +639,6 @@ private struct SoloChordPicker: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(chord.longName)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - SoloPresetList
-
-private struct SoloPresetList: View {
-
-    let onPick: (SoloPreset) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(SoloPreset.Group.allCases, id: \.self) { group in
-                    Section {
-                        ForEach(SoloPreset.all.filter { $0.group == group }) { preset in
-                            Button {
-                                onPick(preset)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    HStack {
-                                        Text(preset.name)
-                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                        Spacer()
-                                        Text(preset.groove.style.displayName)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text(preset.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text("\(preset.groove.keyName) · \(preset.groove.bpm) BPM · solo with \(preset.groove.scaleName)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .padding(.vertical, 2)
-                            }
-                            .foregroundStyle(.primary)
-                        }
-                    } header: {
-                        Text(group.rawValue)
-                    } footer: {
-                        if group == .blues {
-                            Text("The minor pentatonic over dominant 7th chords is the classic blues sound.")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Presets")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
                 }
             }
         }
