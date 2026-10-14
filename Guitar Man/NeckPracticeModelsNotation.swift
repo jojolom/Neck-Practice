@@ -171,39 +171,97 @@ struct KeySignature: Hashable, Codable {
 
 // MARK: - NoteValue
 
-/// How long a note lasts, in quarter-note beats. Drives note-head drawing and measure lengths.
+/// How long a note lasts. Drives note-head drawing and measure lengths. Chords last whole
+/// quarter-note beats (`chordValues`); melody notes can also be eighths and dotted quarters.
 enum NoteValue: String, Codable, CaseIterable, Identifiable {
-    case quarter, half, dottedHalf, whole
+    case eighth, quarter, dottedQuarter, half, dottedHalf, whole
 
     var id: String { rawValue }
 
-    /// The note value lasting `beats` quarter notes (1–4), or nil.
+    /// The values a chord can have: whole beats.
+    static let chordValues: [NoteValue] = [.quarter, .half, .dottedHalf, .whole]
+
+    /// The chord value lasting `beats` quarter notes (1–4), or nil.
     init?(beats: Int) {
-        guard let value = Self.allCases.first(where: { $0.beats == beats }) else { return nil }
+        guard let value = Self.chordValues.first(where: { $0.beats == beats }) else { return nil }
         self = value
     }
 
-    var beats: Int {
+    /// The value lasting `eighths` eighth notes (1, 2, 3, 4, 6 or 8), or nil.
+    init?(eighths: Int) {
+        guard let value = Self.allCases.first(where: { $0.eighths == eighths }) else { return nil }
+        self = value
+    }
+
+    /// The longest value that lasts at most `eighths`, or nil if that's under an eighth.
+    static func longest(fitting eighths: Int) -> NoteValue? {
+        allCases.last { $0.eighths <= eighths }
+    }
+
+    var eighths: Int {
         switch self {
-        case .quarter:    return 1
-        case .half:       return 2
-        case .dottedHalf: return 3
-        case .whole:      return 4
+        case .eighth:        return 1
+        case .quarter:       return 2
+        case .dottedQuarter: return 3
+        case .half:          return 4
+        case .dottedHalf:    return 6
+        case .whole:         return 8
         }
     }
 
+    /// Length in quarter-note beats, rounded down (an eighth is 0): for chords, which only use whole beats.
+    var beats: Int { eighths / 2 }
+
     var displayName: String {
         switch self {
-        case .quarter:    return "Quarter"
-        case .half:       return "Half"
-        case .dottedHalf: return "Dotted Half"
-        case .whole:      return "Whole"
+        case .eighth:        return "Eighth"
+        case .quarter:       return "Quarter"
+        case .dottedQuarter: return "Dotted Quarter"
+        case .half:          return "Half"
+        case .dottedHalf:    return "Dotted Half"
+        case .whole:         return "Whole"
         }
     }
 
     var hasStem: Bool { self != .whole }
-    var isFilled: Bool { self == .quarter }
-    var isDotted: Bool { self == .dottedHalf }
+    var hasFlag: Bool { self == .eighth }
+    var isFilled: Bool { [.eighth, .quarter, .dottedQuarter].contains(self) }
+    var isDotted: Bool { self == .dottedHalf || self == .dottedQuarter }
+}
+
+// MARK: - MeasureAccidentals
+
+/// The accidentals printed through one measure, note by note: a sharp, flat or natural lasts to
+/// the barline on its line or space, so the same note again needs no sign and going back to the
+/// key's note needs one (a natural, in C after an F♯). Start a new one at each barline.
+struct MeasureAccidentals {
+    let keySignature: KeySignature
+    /// Accidental in force on each line or space (by diatonic number), once one's been printed.
+    private var inForce: [Int: Int] = [:]
+
+    init(keySignature: KeySignature) {
+        self.keySignature = keySignature
+    }
+
+    /// The sign to print in front of `pitch` (0 = natural), or nil if none, given what came before.
+    mutating func printed(for pitch: SpelledPitch) -> Int? {
+        let current = inForce[pitch.diatonicNumber] ?? keySignature.accidental(forLetter: pitch.letter)
+        inForce[pitch.diatonicNumber] = pitch.accidental
+        return pitch.accidental == current ? nil : pitch.accidental
+    }
+
+    /// Signs for a column's notes, in the same order (all notes in a chord sound at once, so
+    /// they're all checked against what came before the column).
+    mutating func printed(for pitches: [SpelledPitch]) -> [Int?] {
+        let before = self
+        var signs: [Int?] = []
+        for pitch in pitches {
+            var copy = before
+            signs.append(copy.printed(for: pitch))
+        }
+        for pitch in pitches { _ = printed(for: pitch) }
+        return signs
+    }
 }
 
 // MARK: - Interval

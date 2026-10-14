@@ -4,43 +4,74 @@
 //
 //  Play Along: you play your composition and the app listens. It waits on each chord until it
 //  hears it (strum it again if you miss), marks it green, and moves on — so timing and a little
-//  out-of-tune don't matter. Skip moves past a chord you can't get; it's marked orange.
+//  out-of-tune don't matter. Skip moves past a chord you can't get; it's marked orange. The
+//  card shows where to play the chord it's waiting for. With a melody, a switch picks which
+//  part you play: the chords, or the melody one note at a time.
 //
 
 import SwiftUI
 
 struct CompositionPlayAlongView: View {
 
+    private enum Part: String, CaseIterable {
+        case chords = "Chords"
+        case melody = "Melody"
+    }
+
     let composition: Composition
 
     @Environment(\.dismiss) private var dismiss
     @State private var listener = ChordListener()
-    /// Index into the composition's chords of the one being listened for.
+    @State private var part: Part = .chords
+    /// Index into the part's chords or notes of the one being listened for.
     @State private var current = 0
-    /// Chord (by start beat) → heard (true) or skipped (false).
+    /// Chord (by start beat) or note (by start eighth) → heard (true) or skipped (false).
     @State private var results: [Int: Bool] = [:]
-    /// Strum count when the current chord came up: it needs a fresh strum.
+    /// Strum count when the current chord or note came up: it needs a fresh strum.
     @State private var strumsAtStart = 0
     /// Consecutive analyses that matched, so one lucky frame doesn't count.
     @State private var matchStreak = 0
 
     /// The chords in order (rests in between are skipped: you play at your own pace).
-    private var placed: [Composition.PlacedChord] { composition.chords }
+    private var chords: [Composition.PlacedChord] { composition.chords }
+    private var notes: [Composition.MelodyNote] { composition.melody }
 
-    private var isFinished: Bool { current >= placed.count }
+    private var count: Int { part == .chords ? chords.count : notes.count }
+    private var isFinished: Bool { current >= count }
 
     private var currentChord: CompositionChord? {
+        guard part == .chords, !isFinished else { return nil }
+        return composition.chord(chords[current].symbol)
+    }
+
+    private var currentNote: Composition.MelodyNote? {
+        guard part == .melody, !isFinished else { return nil }
+        return notes[current]
+    }
+
+    /// Key of the current item in `results`.
+    private var currentStart: Int? {
         guard !isFinished else { return nil }
-        return composition.chord(degree: placed[current].degree)
+        return part == .chords ? chords[current].start : notes[current].start
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    if composition.hasMelody && !composition.chords.isEmpty {
+                        Picker("Part", selection: $part) {
+                            ForEach(Part.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 240)
+                    }
+
                     statusCard
 
-                    CompositionStaffView(composition: composition, chordColors: chordColors)
+                    CompositionStaffView(composition: composition,
+                                         chordColors: part == .chords ? colors : [:],
+                                         noteColors: part == .melody ? colors : [:])
                         .padding(.horizontal, 12)
 
                     if listener.isListening && !isFinished {
@@ -86,11 +117,16 @@ struct CompositionPlayAlongView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await listener.start() }
+            .task {
+                // A melody with no chords: there's only the melody to play.
+                if composition.chords.isEmpty && composition.hasMelody { part = .melody }
+                await listener.start()
+            }
             .onDisappear { listener.stop() }
             .onChange(of: listener.chroma) { _, chroma in
                 listen(to: chroma)
             }
+            .onChange(of: part) { restart() }
         }
     }
 
@@ -107,24 +143,44 @@ struct CompositionPlayAlongView: View {
                     .foregroundStyle(.secondary)
             } else if isFinished {
                 let heard = results.values.filter { $0 }.count
-                let allHeard = heard == placed.count
+                let allHeard = heard == count
+                let noun = part == .chords ? "chords" : "notes"
                 Image(systemName: allHeard ? "checkmark.seal.fill" : "forward.circle.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(allHeard ? .green : .orange)
-                Text("\(heard) of \(placed.count) chords")
+                Text("\(heard) of \(count) \(noun)")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                Text(allHeard ? "Every chord, clean. Nice." : "Orange ones were skipped. Try them again?")
+                Text(allHeard ? "Every one, clean. Nice." : "Orange ones were skipped. Try them again?")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else if let chord = currentChord {
-                Text("Chord \(current + 1) of \(placed.count)")
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(spacing: 6) {
+                        Text("Chord \(current + 1) of \(count)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(chord.romanNumeral)
+                            .font(.system(size: 22, weight: .bold, design: .serif))
+                        Text("Play \(chord.name)")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                        Text(chord.pitches.map(\.name).joined(separator: " · "))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    ChordShapesView(chord: chord, width: 92)
+                }
+                if !listener.isListening {
+                    ProgressView()
+                        .padding(.top, 4)
+                }
+            } else if let note = currentNote {
+                Text("Note \(current + 1) of \(count)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text(chord.romanNumeral)
-                    .font(.system(size: 22, weight: .bold, design: .serif))
-                Text("Play \(chord.longName)")
+                Text("Play \(note.pitch.name)")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
-                Text(chord.pitches.map(\.name).joined(separator: " · "))
+                Text(note.value.displayName + " note")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 if !listener.isListening {
@@ -141,10 +197,18 @@ struct CompositionPlayAlongView: View {
         .padding(.horizontal, 16)
     }
 
-    /// What the mic hears, by note: the chord's notes in the accent color. Heights follow the
-    /// listener's smoothed display levels, so the bars stay low when it's quiet and glide.
+    /// The notes to listen for now, as pitch classes.
+    private var listeningFor: Set<Int> {
+        if let chord = currentChord { return chord.pitchClasses }
+        if let note = currentNote { return [note.pitch.note.rawValue] }
+        return []
+    }
+
+    /// What the mic hears, by note: the chord's (or melody note's) notes in the accent color.
+    /// Heights follow the listener's smoothed display levels, so the bars stay low when it's
+    /// quiet and glide.
     private var chromaBars: some View {
-        let tones = currentChord?.pitchClasses ?? []
+        let tones = listeningFor
         let names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]
         let maxBarHeight: CGFloat = 44
         return HStack(alignment: .bottom, spacing: 4) {
@@ -168,18 +232,36 @@ struct CompositionPlayAlongView: View {
         .accessibilityHidden(true)
     }
 
-    private var chordColors: [Int: Color] {
+    private var colors: [Int: Color] {
         var colors: [Int: Color] = [:]
         for (start, heard) in results { colors[start] = heard ? .green : .orange }
-        if !isFinished { colors[placed[current].start] = .accentColor }
+        if let currentStart { colors[currentStart] = .accentColor }
         return colors
     }
 
     // MARK: - Listening
 
+    /// Whether the current chord or note needs a fresh strum or pluck: always for a chord (the
+    /// same chord twice needs two strums), and for a note only when it repeats the last one —
+    /// moving to a new note is enough, so a slur or a hammer-on still counts.
+    private var needsFreshAttack: Bool {
+        guard part == .melody, current > 0, current < notes.count else { return true }
+        return notes[current - 1].pitch.note == notes[current].pitch.note
+    }
+
     private func listen(to chroma: [Double]) {
-        guard let chord = currentChord, listener.strumCount > strumsAtStart else { return }
-        if ChordAnalyzer.matches(chroma: chroma, pitchClasses: chord.pitchClasses) {
+        guard !isFinished, !needsFreshAttack || listener.strumCount > strumsAtStart else { return }
+        let matched: Bool
+        if let chord = currentChord {
+            let required = chord.requiredPitchClasses
+            matched = ChordAnalyzer.matches(chroma: chroma, pitchClasses: required,
+                                            optional: chord.pitchClasses.subtracting(required))
+        } else if let note = currentNote {
+            matched = ChordAnalyzer.matchesNote(chroma: chroma, pitchClass: note.pitch.note.rawValue)
+        } else {
+            matched = false
+        }
+        if matched {
             matchStreak += 1
             if matchStreak >= 2 { advance(heard: true) }
         } else {
@@ -188,9 +270,9 @@ struct CompositionPlayAlongView: View {
     }
 
     private func advance(heard: Bool) {
-        guard !isFinished else { return }
+        guard let start = currentStart else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            results[placed[current].start] = heard
+            results[start] = heard
             current += 1
         }
         strumsAtStart = listener.strumCount

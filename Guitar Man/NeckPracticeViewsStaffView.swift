@@ -17,12 +17,18 @@ struct StaffColumn: Identifiable {
     var value: NoteValue = .whole
     /// Text over the staff (a chord name).
     var above: String? = nil
+    /// Color for `above`; nil draws in the label color.
+    var aboveColor: Color? = nil
     /// Text under the staff (note names, a Roman numeral).
     var below: String? = nil
     /// Note-head color; nil draws in the label color.
     var color: Color? = nil
     /// With no pitches: a rest of this value.
     var rest: NoteValue? = nil
+    /// The sign to print before each pitch (same order; 0 = natural, nil = none), when the
+    /// caller tracks a measure's accidentals (see MeasureAccidentals). Without it, a note gets a
+    /// sign when it differs from the key signature.
+    var accidentals: [Int?]? = nil
 }
 
 struct StaffView: View {
@@ -143,6 +149,17 @@ struct StaffView: View {
         let lowest = positions.min() ?? 4
         let highest = positions.max() ?? 4
         let stemUp = Double(lowest + highest) / 2 < 4
+        // Notes a step apart (a 2nd, C and D in D7) can't share a side of the stem: every other
+        // one of a run of steps moves across it, right of an up stem (and whole notes), left of a
+        // down stem, counting from the end the stem starts at.
+        let headsRight = stemUp || !column.value.hasStem
+        var shifted: Set<Int> = []
+        var previous: Int? = nil
+        for position in Set(positions).sorted(by: headsRight ? (<) : (>)) {
+            if let previous, abs(position - previous) == 1, !shifted.contains(previous) { shifted.insert(position) }
+            previous = position
+        }
+        let shift = shifted.isEmpty ? 0 : (headsRight ? 1 : -1) * (noteHeadWidth - 1.2)
 
         if positions.isEmpty, let rest = column.rest {
             drawRest(rest, x: x, size: size, color: ink, in: &context)
@@ -157,15 +174,18 @@ struct StaffView: View {
             for ledger in ledgers {
                 let ly = y(ledger, in: size)
                 context.stroke(Path { p in
-                    p.move(to: CGPoint(x: x - ledgerHalf, y: ly))
-                    p.addLine(to: CGPoint(x: x + ledgerHalf, y: ly))
+                    p.move(to: CGPoint(x: x - ledgerHalf + min(shift, 0), y: ly))
+                    p.addLine(to: CGPoint(x: x + ledgerHalf + max(shift, 0), y: ly))
                 }, with: .color(Color(.systemGray3)), lineWidth: 1)
             }
 
             // ── Accidentals, staggered left so stacked ones don't collide ──
             var placed: [(position: Int, slot: Int)] = []
-            for pitch in column.pitches.sorted(by: { $0.staffPosition > $1.staffPosition }) {
-                guard let accidental = keySignature.printedAccidental(for: pitch) else { continue }
+            let signs = column.accidentals?.count == column.pitches.count
+                ? column.accidentals!
+                : column.pitches.map { keySignature.printedAccidental(for: $0) }
+            for (pitch, sign) in zip(column.pitches, signs).sorted(by: { $0.0.staffPosition > $1.0.staffPosition }) {
+                guard let accidental = sign else { continue }
                 let position = pitch.staffPosition
                 var slot = 0
                 while placed.contains(where: { $0.slot == slot && abs($0.position - position) < 6 }) {
@@ -173,18 +193,19 @@ struct StaffView: View {
                 }
                 placed.append((position, slot))
                 drawAccidental(accidental,
-                               at: CGPoint(x: x - noteHeadWidth * 0.5 - s * 0.75 - CGFloat(slot) * s * 0.9,
+                               at: CGPoint(x: x + min(shift, 0) - noteHeadWidth * 0.5 - s * 0.75 - CGFloat(slot) * s * 0.9,
                                            y: y(position, in: size)),
                                color: ink, in: &context)
             }
 
             // ── Note heads (and dots) ──
             for position in positions {
-                drawNoteHead(column.value, at: CGPoint(x: x, y: y(position, in: size)), color: ink, in: &context)
+                let headX = shifted.contains(position) ? x + shift : x
+                drawNoteHead(column.value, at: CGPoint(x: headX, y: y(position, in: size)), color: ink, in: &context)
                 if column.value.isDotted {
                     // A dot on a line moves up into the space above.
                     let dotPosition = position % 2 == 0 ? position + 1 : position
-                    let dotRect = CGRect(x: x + noteHeadWidth * 0.5 + s * 0.3, y: y(dotPosition, in: size) - s * 0.17,
+                    let dotRect = CGRect(x: x + max(shift, 0) + noteHeadWidth * 0.5 + s * 0.3, y: y(dotPosition, in: size) - s * 0.17,
                                          width: s * 0.34, height: s * 0.34)
                     context.fill(Path(ellipseIn: dotRect), with: .color(ink))
                 }
@@ -199,6 +220,17 @@ struct StaffView: View {
                     p.move(to: CGPoint(x: stemX, y: fromY))
                     p.addLine(to: CGPoint(x: stemX, y: toY))
                 }, with: .color(ink), lineWidth: 1.2)
+
+                // ── Flag (eighth notes): curling away from the stem's end, toward the note ──
+                if column.value.hasFlag {
+                    let dir: CGFloat = stemUp ? 1 : -1
+                    var flag = Path()
+                    flag.move(to: CGPoint(x: stemX, y: toY))
+                    flag.addCurve(to: CGPoint(x: stemX + s * 0.85, y: toY + dir * s * 2.3),
+                                  control1: CGPoint(x: stemX + s * 0.1, y: toY + dir * s * 0.9),
+                                  control2: CGPoint(x: stemX + s * 1.25, y: toY + dir * s * 1.2))
+                    context.stroke(flag, with: .color(ink), style: StrokeStyle(lineWidth: s * 0.24, lineCap: .round))
+                }
             }
         }
 
@@ -207,7 +239,7 @@ struct StaffView: View {
         if let above = column.above {
             var top = min(y(8, in: size), y(highest, in: size))
             if column.value.hasStem && stemUp && !positions.isEmpty { top = min(top, y(highest, in: size) - stemLength) }
-            context.draw(Text(above).font(font).foregroundColor(Color(.label)),
+            context.draw(Text(above).font(font).foregroundColor(column.aboveColor ?? Color(.label)),
                          at: CGPoint(x: x, y: top - s * 1.3), anchor: .center)
         }
         if let below = column.below {
@@ -242,7 +274,17 @@ struct StaffView: View {
         case .whole, .half:
             let top = value == .whole ? y(6, in: size) : y(4, in: size) - s * 0.5
             context.fill(Path(CGRect(x: x - s * 0.6, y: top, width: s * 1.2, height: s * 0.5)), with: .color(color))
-        case .quarter, .dottedHalf:
+        case .eighth:
+            // A blob with a tail that slants down to the left.
+            let top = y(5, in: size)
+            context.fill(Path(ellipseIn: CGRect(x: x - s * 0.55, y: top - s * 0.3, width: s * 0.5, height: s * 0.5)),
+                         with: .color(color))
+            var p = Path()
+            p.move(to: CGPoint(x: x - s * 0.4, y: top + s * 0.1))
+            p.addQuadCurve(to: CGPoint(x: x + s * 0.4, y: top - s * 0.15), control: CGPoint(x: x, y: top + s * 0.35))
+            p.addLine(to: CGPoint(x: x - s * 0.15, y: top + s * 2.0))
+            context.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: s * 0.22, lineCap: .round, lineJoin: .round))
+        case .quarter, .dottedQuarter, .dottedHalf:
             // Drawn as a path (no font has it reliably): a zigzag down from the top line,
             // ending in a small hook.
             let top = y(7, in: size), w = s * 0.55

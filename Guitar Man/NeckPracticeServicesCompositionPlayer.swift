@@ -6,10 +6,10 @@
 //  hidden option: in the Compose editor, tap "Key" five times quickly to show the Playback
 //  settings, whose "Hear Compositions" toggle adds a speaker button next to Play Along.
 //
-//  Each chord sounds once, on its beat, and rings for its length (rests are silent): its three
-//  notes either all at once or as an arpeggio (low to high, an eighth note apart, each left
-//  ringing). The whole progression goes to AudioPlayer as one timeline, so it keeps
-//  exact time; the staff highlight follows along on the main thread.
+//  Each chord sounds once, on its beat, and rings for its length (rests are silent): its notes
+//  either all at once or as an arpeggio (low to high, an eighth note apart, each left ringing).
+//  A melody plays over it, a little louder than the chords. Everything goes to AudioPlayer as
+//  one timeline, so it keeps exact time; the staff highlight follows along on the main thread.
 //
 
 import AVFoundation
@@ -47,6 +47,8 @@ final class CompositionPlayer {
 
     /// Start beat of the chord being heard, or nil (stopped, or in a rest).
     private(set) var playingChord: Int?
+    /// Start eighth of the melody note being heard, or nil.
+    private(set) var playingNote: Int?
     private(set) var isPlaying = false
 
     private var task: Task<Void, Never>?
@@ -54,33 +56,40 @@ final class CompositionPlayer {
 
     func play(_ composition: Composition, style: CompositionPlaybackStyle, bpm: Int) {
         stop()
-        // Rests are silent, but playback ends with the last chord rather than empty measures.
-        let chords = composition.chords
-        guard let last = chords.last else { return }
-
+        // Rests are silent, but playback ends with the last chord or note rather than empty measures.
+        guard !composition.isEmpty else { return }
         let beat = 60 / Double(min(max(bpm, Self.tempoRange.lowerBound), Self.tempoRange.upperBound))
         AudioPlayer.shared.play(Self.notes(for: composition, style: style, beat: beat))
 
+        // Highlight each chord and note while it sounds, and nothing in the rests between:
+        // (time in eighths, which line, start or nil to clear).
+        var events: [(tick: Int, isChord: Bool, start: Int?)] = []
+        for chord in composition.chords {
+            events.append((chord.start * 2, true, chord.start))
+            if !composition.chords.contains(where: { $0.start == chord.end }) { events.append((chord.end * 2, true, nil)) }
+        }
+        for note in composition.melody {
+            events.append((note.start, false, note.start))
+            if !composition.melody.contains(where: { $0.start == note.end }) { events.append((note.end, false, nil)) }
+        }
+        // Clearing first, so a chord ending where another starts doesn't blank the new one.
+        events.sort { $0.tick != $1.tick ? $0.tick < $1.tick : ($0.start == nil && $1.start != nil) }
+        let end = events.map(\.tick).max() ?? 0
+
         isPlaying = true
-        playingChord = chords.first?.start == 0 ? 0 : nil
         interruptionObserver = AudioSessionSetup.observe(AVAudioSession.interruptionNotification) { [weak self] _ in
             self?.stop()
         }
         task = Task { [weak self] in
             let clock = ContinuousClock()
             let start = clock.now
+            let eighth = beat / 2
             do {
-                // Highlight each chord while it sounds, and nothing in the rests between.
-                for chord in chords {
-                    try await clock.sleep(until: start.advanced(by: .seconds(beat * Double(chord.start))))
-                    self?.playingChord = chord.start
-                    let next = chords.first { $0.start > chord.start }?.start
-                    if next != chord.end {
-                        try await clock.sleep(until: start.advanced(by: .seconds(beat * Double(chord.end))))
-                        self?.playingChord = nil
-                    }
+                for event in events {
+                    try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(event.tick))))
+                    if event.isChord { self?.playingChord = event.start } else { self?.playingNote = event.start }
                 }
-                try await clock.sleep(until: start.advanced(by: .seconds(beat * Double(last.end))))
+                try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(end))))
             } catch {
                 return  // stopped
             }
@@ -101,29 +110,36 @@ final class CompositionPlayer {
         interruptionObserver = nil
         isPlaying = false
         playingChord = nil
+        playingNote = nil
     }
 
     /// Every note of the progression on one timeline (seconds from the start).
     static func notes(for composition: Composition, style: CompositionPlaybackStyle,
                       beat: Double) -> [AudioPlayer.ScheduledNote] {
         var notes: [AudioPlayer.ScheduledNote] = []
+        // Under a melody, the chords step back a little.
+        let chordGain: Float = composition.hasMelody ? 0.6 : 1
         for chord in composition.chords {
             let start = beat * Double(chord.start)
             let chordLength = beat * Double(chord.beats)
-            let midis = composition.chord(degree: chord.degree).pitches.map(\.midi)
+            let midis = composition.chord(chord.symbol).pitches.map(\.midi)
             switch style {
             case .together:
                 // Ring to the next chord; its fade overlaps the next chord's start, so no gap.
-                let gain = 1 / Float(midis.count).squareRoot()
+                let gain = chordGain / Float(midis.count).squareRoot()
                 notes += midis.map { .init(midi: $0, delay: start, duration: chordLength, gain: gain) }
             case .arpeggio:
                 // An eighth note apart (closer if the chord is too short), each left ringing.
                 let gap = min(beat / 2, chordLength / Double(midis.count))
                 notes += midis.enumerated().map { i, midi in
                     let delay = start + Double(i) * gap
-                    return .init(midi: midi, delay: delay, duration: start + chordLength - delay, gain: 0.8)
+                    return .init(midi: midi, delay: delay, duration: start + chordLength - delay, gain: 0.8 * chordGain)
                 }
             }
+        }
+        for note in composition.melody {
+            notes.append(.init(midi: note.pitch.midi, delay: beat / 2 * Double(note.start),
+                               duration: beat / 2 * Double(note.length), gain: 0.9))
         }
         return notes
     }

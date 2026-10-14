@@ -3,9 +3,10 @@
 //  Guitar Man
 //
 //  Pure chord analysis (no AVFoundation): how much of a strum's sound falls on each of the 12
-//  pitch classes (a chroma vector), and a forgiving check of whether that's a given triad — the
-//  "did you play the right chord?" for Composition play-along. It isn't a transcriber: it only
-//  asks "is it this chord?", so a buzzed string or a slightly out-of-tune guitar still counts.
+//  pitch classes (a chroma vector), and a forgiving check of whether that's a given chord (or,
+//  for a melody, a given note) — the "did you play the right chord?" for Composition play-along.
+//  It isn't a transcriber: it only asks "is it this chord?", so a buzzed string or a slightly
+//  out-of-tune guitar still counts.
 //  Kept separate from ChordListener so it can be checked offline — see scripts/chord-check.swift.
 //
 
@@ -85,12 +86,27 @@ enum ChordAnalyzer {
     /// other note comes close to the loudest. That's what tells C (C E G) from Am (A C E): an A minor
     /// strum has a strong A, a C doesn't. And B° (B D F) from Dm (D F A): overtones of D and F put
     /// a little A in a B° strum, but it also has a loud B. (Overtones alone stay under half.)
-    static func matches(chroma: [Double], pitchClasses: Set<Int>) -> Bool {
+    ///
+    /// `optional` notes belong to the chord but may be left out (a seventh chord's 5th, which
+    /// guitar shapes often drop): they count as chord notes when they ring, but aren't required.
+    static func matches(chroma: [Double], pitchClasses: Set<Int>, optional: Set<Int> = []) -> Bool {
         guard chroma.count == 12, let peak = chroma.max(), peak > 0, !pitchClasses.isEmpty else { return false }
-        let classes = Set(pitchClasses.map { (($0 % 12) + 12) % 12 })
+        let required = Set(pitchClasses.map { (($0 % 12) + 12) % 12 })
+        let classes = required.union(optional.map { (($0 % 12) + 12) % 12 })
         let inChord = classes.reduce(0.0) { $0 + chroma[$1] }
-        let everyNote = classes.allSatisfy { chroma[$0] >= 0.25 * peak }
+        let everyNote = required.allSatisfy { chroma[$0] >= 0.25 * peak }
         let noLoudOthers = (0..<12).allSatisfy { classes.contains($0) || chroma[$0] < 0.7 * peak }
         return inChord >= 0.5 && everyNote && noLoudOthers
+    }
+
+    /// Whether `chroma` sounds like the single note `pitchClass` (in any octave): it's the
+    /// loudest, with at least half the sound. A note's overtones fall mostly on itself (the
+    /// octaves) and its 5th, so a plucked note keeps two thirds or more on itself even when the
+    /// mic hears little of its fundamental, while a strummed chord spreads out (a C chord has
+    /// about a third on each of C and E).
+    static func matchesNote(chroma: [Double], pitchClass: Int) -> Bool {
+        guard chroma.count == 12, let peak = chroma.max(), peak > 0 else { return false }
+        let level = chroma[((pitchClass % 12) + 12) % 12]
+        return level >= 0.9 * peak && level >= 0.5
     }
 }
