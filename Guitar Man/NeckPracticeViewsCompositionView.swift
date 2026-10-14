@@ -10,8 +10,8 @@
 //  versions (its 7th, sus chords, in minor the major V) as chips under the row; swiping the
 //  row goes to borrowed and secondary chords (♭VII, iv, V/V…); and the Chords | Melody switch
 //  swaps the numerals for the key's notes. Long-press a chord or note on the staff to change
-//  its length or inversion, see where to play it, or duplicate or clear its measure; Undo and
-//  Redo are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
+//  its length or inversion, see where to play it, or duplicate or clear its measure; Undo,
+//  Redo and the How to Compose guide (ComposeGuideView) are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
 //  notes, with the chords named above and numbered below.
 //
 //  You play it, optionally with Play Along listening and marking each chord (or note) green.
@@ -166,6 +166,7 @@ struct CompositionEditorView: View {
     @State private var showRename = false
     @State private var nameDraft = ""
     @State private var showPlayAlong = false
+    @State private var showGuide = false
 
     // Undo and redo: every change to the composition, whatever made it.
     @State private var history: [Composition] = []
@@ -259,6 +260,9 @@ struct CompositionEditorView: View {
         .fullScreenCover(isPresented: $showPlayAlong) {
             CompositionPlayAlongView(composition: composition)
         }
+        .sheet(isPresented: $showGuide) {
+            ComposeGuideView()
+        }
         // Save as you go, once there's something to keep (and keep saving a saved one, so
         // clearing it sticks). Every change can be undone.
         .onChange(of: composition) { old, updated in
@@ -318,6 +322,11 @@ struct CompositionEditorView: View {
 
     private var moreMenu: some View {
         Menu {
+            Button {
+                showGuide = true
+            } label: {
+                Label("How to Compose", systemImage: "book")
+            }
             Section {
                 Button {
                     undo()

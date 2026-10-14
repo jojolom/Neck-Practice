@@ -36,6 +36,27 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.4",
+            released: "October 2026",
+            releasedOn: DateComponents(year: 2026, month: 10, day: 14),
+            items: [
+                ChangelogItem(symbol: "hand.point.up.left", title: "See where to play each chord",
+                              detail: "Long-press a chord in Compose for a chord chart of where to play it. Play Along shows the shape for each chord as you go, with other spots on the neck a tap away."),
+                ChangelogItem(symbol: "music.note", title: "More chords to compose with",
+                              detail: "Tap a numeral for its 7th and sus chords (and the major V in minor keys), swipe for borrowed and secondary chords like ♭VII, iv and V/V, and long-press a chord to invert it."),
+                ChangelogItem(symbol: "music.quarternote.3", title: "Write a melody",
+                              detail: "Switch Compose to Melody to put single notes over your chords, from eighth notes to whole notes, sharps and flats included. Play Along can listen for it note by note."),
+                ChangelogItem(symbol: "music.note.list", title: "Start from a progression",
+                              detail: "Begin from the pop progression, a jazz ii–V–I, a 12-bar blues and more, in any key. Compositions can now run to 16 measures."),
+                ChangelogItem(symbol: "arrow.uturn.backward", title: "Quicker editing",
+                              detail: "Undo and Redo, copy a measure into the next one, or clear it."),
+                ChangelogItem(symbol: "book", title: "How to Compose",
+                              detail: "A full guide to Compose, from Roman numerals to borrowed chords, in its ⋯ menu."),
+                ChangelogItem(symbol: "arrow.left.arrow.right", title: "Scale Study string pairs",
+                              detail: "Each round plays a scale and its relative on one string, then the parallel scale and its relative on the other."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.3",
             released: "October 2026",
             releasedOn: DateComponents(year: 2026, month: 10, day: 8),
