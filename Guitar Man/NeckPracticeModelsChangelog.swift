@@ -36,6 +36,17 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.5",
+            released: "October 2026",
+            releasedOn: DateComponents(year: 2026, month: 10, day: 20),
+            items: [
+                ChangelogItem(symbol: "guitars.fill", title: "Solo Buddy",
+                              detail: "A backing track to practise your soloing over. Pick a key and up to four chords, or the 12-bar blues, choose a style from fingerpicked to funk, and solo along with the pentatonic box it shows, in any of its five positions."),
+                ChangelogItem(symbol: "music.note.list", title: "21 grooves to jam over",
+                              detail: "Presets from Spanish Nights and Rock Anthem to Slow Blues, Island Reggae and a bossa ii–V–I, each playable in any key."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.4",
             released: "October 2026",
             releasedOn: DateComponents(year: 2026, month: 10, day: 14),

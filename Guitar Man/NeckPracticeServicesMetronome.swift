@@ -87,36 +87,24 @@ final class Metronome {
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
 
-        clickBuffer = generateClick(frequency: 800, duration: 0.06, sampleRate: sampleRate)
-        accentBuffer = generateClick(frequency: 1200, duration: 0.07, sampleRate: sampleRate)
-        subdivisionBuffer = generateClick(frequency: 1000, duration: 0.04, sampleRate: sampleRate, gain: 0.3)
+        clickBuffer = makeBuffer(ClickSound.samples(frequency: ClickSound.beat.frequency,
+                                                    duration: ClickSound.beat.duration, sampleRate: sampleRate))
+        accentBuffer = makeBuffer(ClickSound.samples(frequency: ClickSound.accent.frequency,
+                                                     duration: ClickSound.accent.duration, sampleRate: sampleRate))
+        subdivisionBuffer = makeBuffer(ClickSound.samples(frequency: ClickSound.subdivision.frequency,
+                                                          duration: ClickSound.subdivision.duration,
+                                                          sampleRate: sampleRate, gain: 0.3))
     }
 
-    /// Generates a short click: a tone with its 2nd and 3rd harmonics, decaying fast, driven into
-    /// soft saturation. It peaks just under full scale like a plain sine click would, but carries
-    /// about 9 dB more sound (a plain sine is all peak and little body, and phone speakers favour
-    /// the brighter harmonics), so it cuts through a strummed guitar. A 4 ms fade ends it cleanly.
-    /// (Clicks this long can overlap at the fastest settings; the player node starts each one on
-    /// its own sample regardless.)
-    private func generateClick(frequency: Double, duration: Double,
-                                sampleRate: Double, gain: Float = 1) -> AVAudioPCMBuffer? {
-        let frameCount = AVAudioFrameCount(sampleRate * duration)
+    /// The click (see ClickSound) in a buffer. Clicks this long can overlap at the fastest
+    /// settings; the player node starts each one on its own sample regardless.
+    private func makeBuffer(_ samples: [Float]) -> AVAudioPCMBuffer? {
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else {
             return nil
         }
-        buffer.frameLength = frameCount
-        let data = buffer.floatChannelData![0]
-        let drive = 6.0
-        let fadeFrames = Int(sampleRate * 0.004)
-        for i in 0..<Int(frameCount) {
-            let t = Double(i) / sampleRate
-            let phase = 2.0 * .pi * frequency * t
-            let tone = (sin(phase) + 0.5 * sin(2 * phase) + 0.25 * sin(3 * phase)) / 1.4
-            let saturated = tanh(drive * exp(-t * 40) * tone) / tanh(drive)
-            let fade = min(1, Double(Int(frameCount) - i) / Double(fadeFrames))
-            data[i] = gain * Float(0.97 * saturated * fade)
-        }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
         return buffer
     }
 
