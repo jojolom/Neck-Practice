@@ -54,6 +54,8 @@ enum Changelog {
                               detail: "After you answer, the games now wait for you to tap Next, so you can take in the answer first. Prefer the old pace? Choose After Answering in any game's Settings."),
                 ChangelogItem(symbol: "book", title: "How to Compose",
                               detail: "A full guide to Compose, from Roman numerals to borrowed chords, in its ⋯ menu."),
+                ChangelogItem(symbol: "metronome", title: "A louder metronome",
+                              detail: "The click is brighter and fuller, so it's easier to hear over your guitar, in the Metronome and in Scale Study."),
                 ChangelogItem(symbol: "arrow.left.arrow.right", title: "Scale Study string pairs",
                               detail: "Each round plays a scale and its relative on one string, then the parallel scale and its relative on the other."),
             ]
