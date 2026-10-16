@@ -79,28 +79,27 @@ struct FretboardView: View {
         return set
     }
 
-    /// Pixel x-coordinate of the centre of the highlighted shape in the scroll content.
-    private var shapeCentreX: CGFloat {
-        let frets = allHighlighted.map(\.fret)
-        let lo = frets.min() ?? 1
-        let hi = frets.max() ?? 1
-        let left  = CGFloat(lo - 1) * fretSpacing
-        let right = CGFloat(hi) * fretSpacing
-        return (left + right) / 2
+    /// The frets the highlighted shape spans (open strings sit in the fixed column, so they
+    /// don't count unless the shape is nothing but open strings).
+    private var shapeSpan: ClosedRange<Int> {
+        let all = allHighlighted.map(\.fret)
+        let fretted = all.filter { $0 > 0 }
+        let frets = fretted.isEmpty ? all : fretted
+        let lo = max(frets.min() ?? 1, 1)
+        return lo...max(frets.max() ?? lo, lo)
     }
 
-    // ── Scroll state (iOS 17+) ────────────────────────────────────────────
-    @State private var scrollPosition = ScrollPosition(idType: Int.self)
+    /// The id of an invisible marker over the shape: the scroll view centres it.
+    private static let shapeMarkerID = "fretboard.shape"
 
     var body: some View {
         let totalStrings = stringCount
         let totalFrets   = maxFret
         let neckHeight   = CGFloat(totalStrings - 1) * stringSpacing
         let scrollContentWidth = CGFloat(totalFrets) * fretSpacing + dotRadius + nutWidth
+        let span = shapeSpan
 
-        GeometryReader { geo in
-            let viewportWidth = geo.size.width
-
+        GeometryReader { _ in
             HStack(alignment: .top, spacing: 0) {
 
                 // ── Fixed string labels (EADGBE) / open-string dots ──
@@ -148,8 +147,21 @@ struct FretboardView: View {
                 .padding(.vertical, 20)
 
                 // ── Scrollable fretboard ──────────────────────────────
+                ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
+
+                        // ── The shape's frets, for scrolling to ─────────
+                        // Laid out by width, not `position` (which would make the marker the
+                        // whole neck, so the scroll always centred the middle of the neck).
+                        HStack(spacing: 0) {
+                            Color.clear
+                                .frame(width: CGFloat(span.lowerBound - 1) * fretSpacing, height: 1)
+                            Color.clear
+                                .frame(width: CGFloat(span.count) * fretSpacing, height: 1)
+                                .id(Self.shapeMarkerID)
+                        }
+                        .accessibilityHidden(true)
 
                         // ── String lines ─────────────────────────────
                         ForEach(0..<totalStrings, id: \.self) { s in
@@ -211,23 +223,27 @@ struct FretboardView: View {
                     .frame(width: scrollContentWidth, height: neckHeight + 40)
                     .padding(.vertical, 20)
                 }
-                .scrollPosition($scrollPosition)
-                .onAppear {
-                    if !disableAutoScroll {
-                        scrollPosition.scrollTo(x: scrollCenteredOffset(shapeCentreX,
-                                                                         viewportWidth: viewportWidth - openColWidth,
-                                                                         contentWidth: scrollContentWidth))
-                    }
+                .onAppear { scrollToShape(scroller, animated: false) }
+                // Centre the shape whenever it moves or the neck changes length. The scroll waits
+                // a turn of the run loop so it measures the new layout, not the one before (a
+                // neck that changed length with the shape left the shape half out of view).
+                .onChange(of: [span.lowerBound, span.upperBound, totalFrets]) {
+                    scrollToShape(scroller, animated: true)
                 }
-                .onChange(of: shapeCentreX) { _, newCentre in
-                    if !disableAutoScroll {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            scrollPosition.scrollTo(x: scrollCenteredOffset(newCentre,
-                                                                             viewportWidth: viewportWidth - openColWidth,
-                                                                             contentWidth: scrollContentWidth))
-                        }
-                    }
                 }
+            }
+        }
+    }
+
+    private func scrollToShape(_ scroller: ScrollViewProxy, animated: Bool) {
+        guard !disableAutoScroll, !allHighlighted.isEmpty else { return }
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    scroller.scrollTo(Self.shapeMarkerID, anchor: .center)
+                }
+            } else {
+                scroller.scrollTo(Self.shapeMarkerID, anchor: .center)
             }
         }
     }
@@ -295,15 +311,6 @@ struct FretboardView: View {
             .onTapGesture { onTap?(pos) }
             .animation(.spring(duration: 0.25), value: showDot)
         }
-    }
-
-    /// The scroll x offset that places `centre` in the middle of the viewport,
-    /// clamped so we never scroll past the content edges.
-    private func scrollCenteredOffset(_ centre: CGFloat,
-                                       viewportWidth: CGFloat,
-                                       contentWidth: CGFloat) -> CGFloat {
-        let ideal = centre - viewportWidth / 2
-        return max(0, min(ideal, contentWidth - viewportWidth))
     }
 
     private func dotColor(pos: FretboardPosition, isHighlighted: Bool,

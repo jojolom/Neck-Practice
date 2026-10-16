@@ -7,7 +7,9 @@
 //  top shows the chord you're on and the next one; the fretboard under it shows the pentatonic
 //  box to solo with, any of its five positions; chords and settings come after. Chords are Roman numerals (as in
 //  Compose), so a preset or your own progression plays in any key. Presets are cards to swipe
-//  through at the top (Grooves), a group at a time. The groove is remembered.
+//  through at the top (Grooves), a group at a time, after Your Groove: the one you made (or
+//  Make Your Own, which starts from the key's one chord and asks for the next). Changing a
+//  preset's chords makes it your groove. Both the groove playing and yours are remembered.
 //
 
 import SwiftUI
@@ -15,39 +17,47 @@ import SwiftUI
 struct SoloBuddyView: View {
 
     private static let storageKey = "soloBuddy.groove"
+    private static let myGrooveKey = "soloBuddy.myGroove"
+    private static let chordsID = "soloBuddy.chords"
+    private static let myGrooveCardID = "soloBuddy.mine"
 
     @State private var track = BackingTrack()
     @State private var groove: SoloGroove = SoloBuddyView.loadGroove()
+    /// The groove you made, kept while you try presets.
+    @State private var myGroove: SoloGroove? = SoloBuddyView.loadMyGroove()
     @AppStorage("soloBuddy.countIn") private var countsIn = true
     @AppStorage("soloBuddy.click") private var clicks = false
     @AppStorage("soloBuddy.position") private var position = 1
     /// Which presets the Grooves row shows.
     @State private var presetGroup: SoloPreset.Group = .minor
-    /// The chord slot being picked (an index, or `chords.count` for a new one).
-    @State private var pickingSlot: Int? = nil
+    /// The chord being picked: one to change, or new ones to add.
+    @State private var picking: ChordPick? = nil
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationContainer {
-            ScrollView {
-                VStack(spacing: 16) {
-                    presetPicker
-                    // What you need while soloing: the chord you're on and the box.
-                    nowPlaying
-                    scaleCard
-                    chordRow
-                    settingsCard
+            ScrollViewReader { page in
+                ScrollView {
+                    VStack(spacing: 16) {
+                        presetPicker(page)
+                        // What you need while soloing: the chord you're on and the box.
+                        nowPlaying
+                        scaleCard
+                        chordRow
+                            .id(Self.chordsID)
+                        settingsCard
+                    }
+                    .padding(.vertical, 12)
                 }
-                .padding(.vertical, 12)
             }
             .safeAreaInset(edge: .bottom) { playBar }
             .navigationTitle("Solo Buddy")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: Binding(get: { pickingSlot.map(ChordSlot.init) }, set: { pickingSlot = $0?.index })) { slot in
-                SoloChordPicker(groove: groove, slot: slot.index) { symbol in
-                    setChord(symbol, at: slot.index)
+            .sheet(item: $picking) { pick in
+                SoloChordPicker(groove: groove, slot: pick.slot) { symbol in
+                    setChord(symbol, for: pick)
                 } onRemove: {
-                    removeChord(at: slot.index)
+                    if let slot = pick.slot { removeChord(at: slot) }
                 }
                 .presentationDetents([.medium, .large])
             }
@@ -60,8 +70,11 @@ struct SoloBuddyView: View {
             .onDisappear { track.stop() }
             .onChange(of: groove) { _, updated in
                 track.groove = updated
-                if let data = try? JSONEncoder().encode(updated) {
-                    UserDefaults.standard.set(data, forKey: Self.storageKey)
+                Self.save(updated, forKey: Self.storageKey)
+                // A groove that isn't a preset (any more) is yours.
+                if updated.presetID == nil {
+                    myGroove = updated
+                    Self.save(updated, forKey: Self.myGrooveKey)
                 }
             }
             .onChange(of: countsIn) { track.countsIn = countsIn }
@@ -72,24 +85,50 @@ struct SoloBuddyView: View {
         }
     }
 
-    private static func loadGroove() -> SoloGroove {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let groove = try? JSONDecoder().decode(SoloGroove.self, from: data) {
-            return groove
-        }
-        return SoloPreset.all[0].groove
+    private static func load(forKey key: String) -> SoloGroove? {
+        UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(SoloGroove.self, from: $0) }
     }
 
-    private struct ChordSlot: Identifiable {
-        let index: Int
-        var id: Int { index }
+    private static func save(_ groove: SoloGroove, forKey key: String) {
+        if let data = try? JSONEncoder().encode(groove) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    private static func loadGroove() -> SoloGroove {
+        load(forKey: storageKey) ?? SoloPreset.all[0].groove
+    }
+
+    /// Yours, or (from before Your Groove had its own place) the groove playing if it isn't a preset.
+    private static func loadMyGroove() -> SoloGroove? {
+        if let mine = load(forKey: myGrooveKey) { return mine }
+        let current = loadGroove()
+        return current.presetID == nil ? current : nil
+    }
+
+    /// The chord picker: changing the chord in a slot, or adding chords to the end.
+    private enum ChordPick: Identifiable {
+        case change(Int)
+        case add
+
+        var id: String {
+            switch self {
+            case .change(let slot): return "change\(slot)"
+            case .add: return "add"
+            }
+        }
+
+        var slot: Int? {
+            if case .change(let slot) = self { return slot }
+            return nil
+        }
     }
 
     // MARK: - Grooves
 
-    /// The presets as cards to swipe through, a group at a time; the one playing is outlined.
-    /// Picking one while it plays changes the backing at the next bar.
-    private var presetPicker: some View {
+    /// Your groove, then the presets, as cards to swipe through a group at a time; the one
+    /// playing is outlined. Picking one while it plays changes the backing at the next bar.
+    private func presetPicker(_ page: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Grooves")
@@ -108,6 +147,8 @@ struct SoloBuddyView: View {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 10) {
+                        myGrooveCard(page)
+                            .id(Self.myGrooveCardID)
                         ForEach(SoloPreset.all.filter { $0.group == presetGroup }) { preset in
                             presetCard(preset)
                                 .id(preset.id)
@@ -129,43 +170,118 @@ struct SoloBuddyView: View {
         return Button {
             withAnimation(.easeInOut(duration: 0.2)) { groove = preset.groove }
         } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text(preset.groove.style.displayName.uppercased())
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(isOn ? Color.accentColor : .secondary)
-                    Spacer()
-                    if isOn {
-                        Image(systemName: track.isPlaying ? "speaker.wave.2.fill" : "checkmark.circle.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                    }
-                }
-                Text(preset.name)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(preset.detail)
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
-                Spacer(minLength: 0)
-                Text("\(preset.groove.keyName) · \(preset.groove.bpm) BPM")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(14)
-            .frame(width: 210, height: 128, alignment: .topLeading)
-            .background(isOn ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isOn ? Color.accentColor : Color.clear, lineWidth: 2)
-            }
+            grooveCard(label: preset.groove.style.displayName, title: preset.name, detail: preset.detail,
+                       footer: "\(preset.groove.keyName) · \(preset.groove.bpm) BPM", isOn: isOn)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(preset.name), \(preset.groove.style.displayName). \(preset.detail) \(preset.groove.keyName), \(preset.groove.bpm) beats per minute. Solo with \(preset.groove.scaleName).")
         .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// The groove you made (its chords, style and key), or Make Your Own when there isn't one.
+    private func myGrooveCard(_ page: ScrollViewProxy) -> some View {
+        let isOn = groove.presetID == nil
+        let mine = isOn ? groove : myGroove
+        return Button {
+            if let mine, !isOn {
+                withAnimation(.easeInOut(duration: 0.2)) { groove = mine }
+            } else if mine == nil {
+                startFromScratch(page)
+            } else {
+                withAnimation(.easeInOut(duration: 0.3)) { page.scrollTo(Self.chordsID, anchor: .top) }
+            }
+        } label: {
+            if let mine {
+                grooveCard(label: mine.style.displayName, title: "Your Groove", detail: chordList(mine),
+                           footer: "\(mine.keyName) · \(mine.bpm) BPM", isOn: isOn)
+            } else {
+                grooveCard(label: "Start From Scratch", title: "Make Your Own",
+                           detail: "Pick your chords, a style and a tempo.", footer: "Any key", isOn: false,
+                           icon: "plus.circle.fill")
+            }
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if mine != nil {
+                Button {
+                    startFromScratch(page)
+                } label: {
+                    Label("Start From Scratch", systemImage: "arrow.counterclockwise")
+                }
+            }
+        }
+        .accessibilityLabel(mine.map { "Your Groove, \($0.style.displayName). \(chordList($0)). \($0.keyName), \($0.bpm) beats per minute." }
+                            ?? "Make your own groove")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// "Am – G – F – E", or the 12-bar blues.
+    private func chordList(_ groove: SoloGroove) -> String {
+        groove.form == .twelveBar
+            ? "The 12-bar blues."
+            : groove.chords.map { groove.chord($0).name }.joined(separator: " – ")
+    }
+
+    private func grooveCard(label: String, title: String, detail: String, footer: String, isOn: Bool,
+                            icon: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(label.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(isOn || icon != nil ? Color.accentColor : .secondary)
+                    .lineLimit(1)
+                Spacer()
+                if isOn {
+                    Image(systemName: track.isPlaying ? "speaker.wave.2.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                } else if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            Text(title)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(detail)
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(2, reservesSpace: true)
+            Spacer(minLength: 0)
+            Text(footer)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .frame(width: 210, height: 128, alignment: .topLeading)
+        .background(isOn ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isOn ? Color.accentColor : Color.clear, lineWidth: 2)
+        }
+        .overlay {
+            // Make Your Own: a dashed outline, an empty slot to fill.
+            if icon != nil {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color.accentColor.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+            }
+        }
+    }
+
+    /// A groove of just the key's one chord, in the key and style playing now; then the chord
+    /// picker opens to add the next.
+    private func startFromScratch(_ page: ScrollViewProxy) {
+        let style: BackingStyle = groove.style == .shuffle || groove.style == .waltz ? .strummed : groove.style
+        withAnimation(.easeInOut(duration: 0.2)) {
+            groove = SoloGroove(keyRoot: groove.keyRoot, isMinor: groove.isMinor, chords: [ChordSymbol(degree: 1)],
+                                form: .loop, style: style, bpm: style.defaultBPM, barsPerChord: 1,
+                                scale: groove.isMinor ? .minor : .major, presetID: nil)
+        }
+        withAnimation(.easeInOut(duration: 0.3)) { page.scrollTo(Self.chordsID, anchor: .top) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { picking = .add }
     }
 
     // MARK: - Now playing
@@ -175,9 +291,9 @@ struct SoloBuddyView: View {
         let barIndex = track.bar ?? 0
         let current = groove.chord(groove.symbol(forBar: barIndex))
         let next = groove.chord(groove.symbol(forBar: barIndex + 1))
-        let presetName = SoloPreset.preset(groove.presetID)?.name
+        let grooveName = SoloPreset.preset(groove.presetID)?.name ?? "Your Groove"
         return VStack(spacing: 8) {
-            Text(presetName.map { "\($0) · \(groove.keyName)" } ?? groove.keyName)
+            Text("\(grooveName) · \(groove.keyName)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if track.isCountingIn {
@@ -253,7 +369,7 @@ struct SoloBuddyView: View {
                 HStack(spacing: 8) {
                     ForEach(Array(groove.chords.prefix(4).enumerated()), id: \.offset) { index, symbol in
                         chordChip(symbol, isCurrent: isCurrent(slot: index)) {
-                            pickingSlot = index
+                            picking = .change(index)
                         }
                         .contextMenu {
                             if groove.chords.count > 1 {
@@ -267,7 +383,7 @@ struct SoloBuddyView: View {
                     }
                     if groove.chords.count < SoloGroove.chordRange.upperBound {
                         Button {
-                            pickingSlot = groove.chords.count
+                            picking = .add
                         } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 18, weight: .semibold))
@@ -279,9 +395,23 @@ struct SoloBuddyView: View {
                         .accessibilityLabel("Add a chord")
                     }
                 }
-                Text("Tap a chord to change it. Long-press to remove it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Tap a chord to change it. Long-press to remove it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if groove.chords.count > 1 {
+                        Button("Start Over") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                groove.chords = [ChordSymbol(degree: 1)]
+                                groove.presetID = nil
+                            }
+                            picking = .add
+                        }
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .accessibilityHint("Keeps just the key's one chord, then lets you add the next")
+                    }
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -349,21 +479,25 @@ struct SoloBuddyView: View {
         .accessibilityHint("Tap to change it")
     }
 
-    private func setChord(_ symbol: ChordSymbol, at index: Int) {
-        if index < groove.chords.count {
+    /// A changed chord closes the picker; an added one leaves it open for the next, until there are four.
+    private func setChord(_ symbol: ChordSymbol, for pick: ChordPick) {
+        switch pick {
+        case .change(let index):
+            guard groove.chords.indices.contains(index) else { break }
             groove.chords[index] = symbol
-        } else if groove.chords.count < SoloGroove.chordRange.upperBound {
-            groove.chords.append(symbol)
+            picking = nil
+        case .add:
+            if groove.chords.count < SoloGroove.chordRange.upperBound { groove.chords.append(symbol) }
+            if groove.chords.count >= SoloGroove.chordRange.upperBound { picking = nil }
         }
         groove.presetID = nil
-        pickingSlot = nil
     }
 
     private func removeChord(at index: Int) {
         guard groove.chords.count > 1, groove.chords.indices.contains(index) else { return }
         groove.chords.remove(at: index)
         groove.presetID = nil
-        pickingSlot = nil
+        picking = nil
     }
 
     // MARK: - Settings
@@ -501,8 +635,17 @@ struct SoloBuddyView: View {
             .padding(.horizontal, 20)
 
             HStack {
-                Text("Position")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                // The frets here too: the numbers under the neck can be out of sight.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Position")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text("Frets \(box.minFret)–\(box.maxFret)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.2), value: box.minFret)
+                }
                 Spacer()
                 Picker("Position", selection: $position) {
                     ForEach(1...allPentatonicShapes.count, id: \.self) { n in
@@ -526,7 +669,7 @@ struct SoloBuddyView: View {
             .padding(.horizontal, 8)
             .animation(.easeInOut(duration: 0.3), value: position)
 
-            Text("Orange dots are the root, \(groove.tonicName). Frets \(box.minFret)–\(box.maxFret).")
+            Text("Orange dots are the root, \(groove.tonicName).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 20)
@@ -556,24 +699,27 @@ struct SoloBuddyView: View {
 
 // MARK: - SoloChordPicker
 
-/// Pick a chord for a slot: the key's chords, their 7ths, and borrowed and secondary chords.
+/// Pick a chord for a slot (`slot`), or add chords one after another (`slot` nil: it stays open,
+/// showing the chords so far, until Done or there are four): the key's chords, their 7ths, and
+/// borrowed and secondary chords.
 private struct SoloChordPicker: View {
 
     let groove: SoloGroove
-    let slot: Int
+    let slot: Int?
     let onPick: (ChordSymbol) -> Void
     let onRemove: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
     private var current: ChordSymbol? {
-        groove.chords.indices.contains(slot) ? groove.chords[slot] : nil
+        slot.flatMap { groove.chords.indices.contains($0) ? groove.chords[$0] : nil }
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    if slot == nil { progressionSoFar }
                     section("Chords in \(groove.keyName)", (1...7).map { ChordSymbol(degree: $0) })
                     section("7th Chords", (1...7).map { ChordSymbol(degree: $0, kind: .seventh) })
                     section("Bluesy 7ths", bluesy)
@@ -591,14 +737,58 @@ private struct SoloChordPicker: View {
                 }
                 .padding(20)
             }
-            .navigationTitle(current == nil ? "Add a Chord" : "Change Chord \(slot + 1)")
+            .navigationTitle(slot.map { "Change Chord \($0 + 1)" } ?? "Add Chords")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                if slot == nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
                 }
             }
         }
+    }
+
+    /// The chords so far and a slot for each still to come, so you can see the progression grow.
+    private var progressionSoFar: some View {
+        let limit = SoloGroove.chordRange.upperBound
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(0..<limit, id: \.self) { index in
+                    let chord = groove.chords.indices.contains(index) ? groove.chord(groove.chords[index]) : nil
+                    VStack(spacing: 1) {
+                        Text(chord?.name ?? " ")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                        Text(chord?.romanNumeral ?? " ")
+                            .font(.system(size: 11, weight: .semibold, design: .serif))
+                            .foregroundStyle(.secondary)
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(chord == nil ? Color.clear : Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        if chord == nil {
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color(.systemGray3), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        }
+                    }
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: groove.chords)
+            Text(groove.chords.count >= limit
+                 ? "That's four. Tap Done to play it."
+                 : "Pick chord \(groove.chords.count + 1), or tap Done to play these.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// Dominant 7ths on I and IV (the blues), and in minor the major V and V7.
