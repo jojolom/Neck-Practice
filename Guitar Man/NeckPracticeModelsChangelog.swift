@@ -43,7 +43,7 @@ enum Changelog {
                 ChangelogItem(symbol: "guitars.fill", title: "Solo Buddy",
                               detail: "A backing track to practise your soloing over. Pick a key and up to four chords, or the 12-bar blues, choose a style from fingerpicked to funk, and solo along with the pentatonic box it shows, in any of its five positions."),
                 ChangelogItem(symbol: "music.note.list", title: "21 grooves to jam over",
-                              detail: "Presets from Spanish Nights and Rock Anthem to Slow Blues, Island Reggae and a bossa ii–V–I, each playable in any key. Or tap Make Your Own and build a groove from scratch, chord by chord."),
+                              detail: "Presets from Spanish Nights and Rock Anthem to Slow Blues, Island Reggae and a bossa ii–V–I, each playable in any key. Tap Grooves to pick one, start your own from scratch chord by chord, and save the grooves you make."),
                 ChangelogItem(symbol: "speaker.wave.2", title: "Hear your compositions",
                               detail: "Turn on Hear Compositions in Compose Settings (the ⋯ menu) and a speaker button plays your piece on the guitar, chords and melody, before you play along."),
                 ChangelogItem(symbol: "sparkles.rectangle.stack", title: "A tour of Compose",

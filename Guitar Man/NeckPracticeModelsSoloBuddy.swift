@@ -91,11 +91,21 @@ struct SoloGroove: Codable, Equatable {
     var scale: PentatonicQuality = .minor
     /// The preset it came from, if it's unchanged since (for the title).
     var presetID: String? = nil
+    /// The saved groove it was opened from (it may have been changed since).
+    var savedID: UUID? = nil
 
     static let chordRange = 1...4
     static let tempoRange = 50...180
 
     var keySignature: KeySignature { KeySignature(root: keyRoot, isMinor: isMinor) }
+
+    /// The same music (key, chords, style, tempo, scale), wherever each came from.
+    func sameMusic(as other: SoloGroove) -> Bool {
+        var a = self, b = other
+        a.presetID = nil; a.savedID = nil
+        b.presetID = nil; b.savedID = nil
+        return a == b
+    }
 
     /// "A Minor".
     var keyName: String { isMinor ? keySignature.minorKeyName : keySignature.majorKeyName }
@@ -418,5 +428,61 @@ struct BarClock {
     func position(at frame: Int64, in bars: [Bar]) -> (index: Int, fraction: Double)? {
         guard let bar = bars.last(where: { $0.frame <= frame }) else { return nil }
         return (bar.index, min(Double(frame - bar.frame) / Double(bar.frames), 1))
+    }
+}
+
+// MARK: - Saved grooves
+
+/// A groove you saved, by name.
+struct SavedGroove: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var name: String
+    var groove: SoloGroove
+    var savedAt = Date()
+
+    /// The groove ready to play: it remembers it came from here.
+    var playable: SoloGroove {
+        var groove = self.groove
+        groove.presetID = nil
+        groove.savedID = id
+        return groove
+    }
+}
+
+/// Saved grooves, newest first, kept in UserDefaults.
+enum SavedGrooves {
+    static let key = "soloBuddy.savedGrooves"
+
+    /// Where 1.5's TestFlight builds kept the one groove you'd made ("Your Groove").
+    static let oldYourGrooveKey = "soloBuddy.myGroove"
+
+    static func load(_ defaults: UserDefaults = .standard) -> [SavedGroove] {
+        var saved = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([SavedGroove].self, from: $0) } ?? []
+        // Your Groove from a TestFlight build becomes a saved groove, once.
+        if let data = defaults.data(forKey: oldYourGrooveKey) {
+            if let groove = try? JSONDecoder().decode(SoloGroove.self, from: data),
+               !saved.contains(where: { $0.groove.sameMusic(as: groove) }) {
+                var music = groove
+                music.presetID = nil
+                music.savedID = nil
+                saved.append(SavedGroove(name: unusedName("My Groove", in: saved), groove: music))
+                store(saved, defaults)
+            }
+            defaults.removeObject(forKey: oldYourGrooveKey)
+        }
+        return saved.sorted { $0.savedAt > $1.savedAt }
+    }
+
+    static func store(_ saved: [SavedGroove], _ defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: key) }
+    }
+
+    /// `base`, or "base 2", "base 3"… if a saved groove already has that name.
+    static func unusedName(_ base: String, in saved: [SavedGroove]) -> String {
+        let names = Set(saved.map(\.name))
+        guard names.contains(base) else { return base }
+        var number = 2
+        while names.contains("\(base) \(number)") { number += 1 }
+        return "\(base) \(number)"
     }
 }

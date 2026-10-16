@@ -3,13 +3,13 @@
 //  Guitar Man
 //
 //  Solo Buddy: pick a key, one to four chords (or the 12-bar blues), a style and a tempo, or
-//  start from a preset, and it plays a backing to solo over on the nylon guitar. The card at the
-//  top shows the chord you're on and the next one; the fretboard under it shows the pentatonic
-//  box to solo with, any of its five positions; chords and settings come after. Chords are Roman numerals (as in
-//  Compose), so a preset or your own progression plays in any key. Presets are cards to swipe
-//  through at the top (Grooves), a group at a time, after Your Groove: the one you made (or
-//  Make Your Own, which starts from the key's one chord and asks for the next). Changing a
-//  preset's chords makes it your groove. Both the groove playing and yours are remembered.
+//  start from a preset, and it plays a backing to solo over on the nylon guitar. The Grooves
+//  button at the top names the groove playing and opens the Grooves sheet: save it (or save
+//  changes to one you saved), start from scratch, or pick one of yours or a preset. The card
+//  under it shows the chord you're on and the next one; the fretboard shows the pentatonic box
+//  to solo with, any of its five positions; chords and settings come after. Chords are Roman
+//  numerals (as in Compose), so a preset or your own progression plays in any key. The groove
+//  playing is remembered, and saved grooves are kept (SavedGrooves).
 //
 
 import SwiftUI
@@ -17,19 +17,18 @@ import SwiftUI
 struct SoloBuddyView: View {
 
     private static let storageKey = "soloBuddy.groove"
-    private static let myGrooveKey = "soloBuddy.myGroove"
     private static let chordsID = "soloBuddy.chords"
-    private static let myGrooveCardID = "soloBuddy.mine"
 
     @State private var track = BackingTrack()
     @State private var groove: SoloGroove = SoloBuddyView.loadGroove()
-    /// The groove you made, kept while you try presets.
-    @State private var myGroove: SoloGroove? = SoloBuddyView.loadMyGroove()
+    @State private var saved: [SavedGroove] = SavedGrooves.load()
     @AppStorage("soloBuddy.countIn") private var countsIn = true
     @AppStorage("soloBuddy.click") private var clicks = false
     @AppStorage("soloBuddy.position") private var position = 1
-    /// Which presets the Grooves row shows.
-    @State private var presetGroup: SoloPreset.Group = .minor
+    @State private var showGrooves = false
+    /// Start From Scratch was picked in the Grooves sheet: once it's closed, go to the chords.
+    @State private var startsFromScratch = false
+    @State private var scratchRequest = 0
     /// The chord being picked: one to change, or new ones to add.
     @State private var picking: ChordPick? = nil
     @Environment(\.scenePhase) private var scenePhase
@@ -39,7 +38,7 @@ struct SoloBuddyView: View {
             ScrollViewReader { page in
                 ScrollView {
                     VStack(spacing: 16) {
-                        presetPicker(page)
+                        grooveHeader
                         // What you need while soloing: the chord you're on and the box.
                         nowPlaying
                         scaleCard
@@ -48,6 +47,11 @@ struct SoloBuddyView: View {
                         settingsCard
                     }
                     .padding(.vertical, 12)
+                    // Start From Scratch: show the chords and ask for the next one.
+                    .onChange(of: scratchRequest) {
+                        withAnimation(.easeInOut(duration: 0.3)) { page.scrollTo(Self.chordsID, anchor: .top) }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { picking = .add }
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) { playBar }
@@ -61,8 +65,20 @@ struct SoloBuddyView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showGrooves, onDismiss: {
+                if startsFromScratch {
+                    startsFromScratch = false
+                    scratchRequest += 1
+                }
+            }) {
+                GroovesSheet(groove: groove, saved: $saved) { picked in
+                    withAnimation(.easeInOut(duration: 0.2)) { groove = picked }
+                } onStartFromScratch: {
+                    startFromScratch()
+                    startsFromScratch = true
+                }
+            }
             .onAppear {
-                presetGroup = SoloPreset.preset(groove.presetID)?.group ?? presetGroup
                 track.groove = groove
                 track.countsIn = countsIn
                 track.clicks = clicks
@@ -70,13 +86,11 @@ struct SoloBuddyView: View {
             .onDisappear { track.stop() }
             .onChange(of: groove) { _, updated in
                 track.groove = updated
-                Self.save(updated, forKey: Self.storageKey)
-                // A groove that isn't a preset (any more) is yours.
-                if updated.presetID == nil {
-                    myGroove = updated
-                    Self.save(updated, forKey: Self.myGrooveKey)
+                if let data = try? JSONEncoder().encode(updated) {
+                    UserDefaults.standard.set(data, forKey: Self.storageKey)
                 }
             }
+            .onChange(of: saved) { _, updated in SavedGrooves.store(updated) }
             .onChange(of: countsIn) { track.countsIn = countsIn }
             .onChange(of: clicks) { track.clicks = clicks }
             .onChange(of: scenePhase) { _, phase in
@@ -85,25 +99,9 @@ struct SoloBuddyView: View {
         }
     }
 
-    private static func load(forKey key: String) -> SoloGroove? {
-        UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(SoloGroove.self, from: $0) }
-    }
-
-    private static func save(_ groove: SoloGroove, forKey key: String) {
-        if let data = try? JSONEncoder().encode(groove) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-
     private static func loadGroove() -> SoloGroove {
-        load(forKey: storageKey) ?? SoloPreset.all[0].groove
-    }
-
-    /// Yours, or (from before Your Groove had its own place) the groove playing if it isn't a preset.
-    private static func loadMyGroove() -> SoloGroove? {
-        if let mine = load(forKey: myGrooveKey) { return mine }
-        let current = loadGroove()
-        return current.presetID == nil ? current : nil
+        UserDefaults.standard.data(forKey: storageKey)
+            .flatMap { try? JSONDecoder().decode(SoloGroove.self, from: $0) } ?? SoloPreset.all[0].groove
     }
 
     /// The chord picker: changing the chord in a slot, or adding chords to the end.
@@ -126,162 +124,59 @@ struct SoloBuddyView: View {
 
     // MARK: - Grooves
 
-    /// Your groove, then the presets, as cards to swipe through a group at a time; the one
-    /// playing is outlined. Picking one while it plays changes the backing at the next bar.
-    private func presetPicker(_ page: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Grooves")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                Spacer()
-                Picker("Group", selection: $presetGroup.animation(.easeInOut(duration: 0.2))) {
-                    ForEach(SoloPreset.Group.allCases, id: \.self) { group in
-                        Text(group.shortName).tag(group)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 210)
-            }
-            .padding(.horizontal, 20)
-
-            ScrollViewReader { scroller in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 10) {
-                        myGrooveCard(page)
-                            .id(Self.myGrooveCardID)
-                        ForEach(SoloPreset.all.filter { $0.group == presetGroup }) { preset in
-                            presetCard(preset)
-                                .id(preset.id)
+    /// The groove playing, and the button to the Grooves sheet (saving, yours, presets).
+    private var grooveHeader: some View {
+        Button {
+            showGrooves = true
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(GroovesSheet.name(of: groove, saved: saved))
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        if GroovesSheet.hasUnsavedChanges(groove, saved: saved) {
+                            Text("Edited")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(.tertiarySystemFill), in: Capsule())
                         }
                     }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, 16)
+                    Text(GroovesSheet.detail(of: groove))
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .scrollTargetBehavior(.viewAligned)
-                .onAppear {
-                    if let id = groove.presetID { scroller.scrollTo(id, anchor: .leading) }
-                }
+                Spacer(minLength: 8)
+                Label("Grooves", systemImage: "square.stack.fill")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.accentColor, in: Capsule())
             }
-        }
-    }
-
-    private func presetCard(_ preset: SoloPreset) -> some View {
-        let isOn = groove.presetID == preset.id
-        return Button {
-            withAnimation(.easeInOut(duration: 0.2)) { groove = preset.groove }
-        } label: {
-            grooveCard(label: preset.groove.style.displayName, title: preset.name, detail: preset.detail,
-                       footer: "\(preset.groove.keyName) · \(preset.groove.bpm) BPM", isOn: isOn)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(preset.name), \(preset.groove.style.displayName). \(preset.detail) \(preset.groove.keyName), \(preset.groove.bpm) beats per minute. Solo with \(preset.groove.scaleName).")
-        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .padding(.horizontal, 16)
+        .accessibilityLabel("Grooves. Playing \(GroovesSheet.name(of: groove, saved: saved)), \(GroovesSheet.detail(of: groove))")
+        .accessibilityHint("Save this groove, start from scratch, or pick another")
     }
 
-    /// The groove you made (its chords, style and key), or Make Your Own when there isn't one.
-    private func myGrooveCard(_ page: ScrollViewProxy) -> some View {
-        let isOn = groove.presetID == nil
-        let mine = isOn ? groove : myGroove
-        return Button {
-            if let mine, !isOn {
-                withAnimation(.easeInOut(duration: 0.2)) { groove = mine }
-            } else if mine == nil {
-                startFromScratch(page)
-            } else {
-                withAnimation(.easeInOut(duration: 0.3)) { page.scrollTo(Self.chordsID, anchor: .top) }
-            }
-        } label: {
-            if let mine {
-                grooveCard(label: mine.style.displayName, title: "Your Groove", detail: chordList(mine),
-                           footer: "\(mine.keyName) · \(mine.bpm) BPM", isOn: isOn)
-            } else {
-                grooveCard(label: "Start From Scratch", title: "Make Your Own",
-                           detail: "Pick your chords, a style and a tempo.", footer: "Any key", isOn: false,
-                           icon: "plus.circle.fill")
-            }
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            if mine != nil {
-                Button {
-                    startFromScratch(page)
-                } label: {
-                    Label("Start From Scratch", systemImage: "arrow.counterclockwise")
-                }
-            }
-        }
-        .accessibilityLabel(mine.map { "Your Groove, \($0.style.displayName). \(chordList($0)). \($0.keyName), \($0.bpm) beats per minute." }
-                            ?? "Make your own groove")
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-
-    /// "Am – G – F – E", or the 12-bar blues.
-    private func chordList(_ groove: SoloGroove) -> String {
-        groove.form == .twelveBar
-            ? "The 12-bar blues."
-            : groove.chords.map { groove.chord($0).name }.joined(separator: " – ")
-    }
-
-    private func grooveCard(label: String, title: String, detail: String, footer: String, isOn: Bool,
-                            icon: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(label.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(isOn || icon != nil ? Color.accentColor : .secondary)
-                    .lineLimit(1)
-                Spacer()
-                if isOn {
-                    Image(systemName: track.isPlaying ? "speaker.wave.2.fill" : "checkmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                } else if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            Text(title)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(detail)
-                .font(.system(size: 13, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(2, reservesSpace: true)
-            Spacer(minLength: 0)
-            Text(footer)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(14)
-        .frame(width: 210, height: 128, alignment: .topLeading)
-        .background(isOn ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(isOn ? Color.accentColor : Color.clear, lineWidth: 2)
-        }
-        .overlay {
-            // Make Your Own: a dashed outline, an empty slot to fill.
-            if icon != nil {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(Color.accentColor.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-            }
-        }
-    }
-
-    /// A groove of just the key's one chord, in the key and style playing now; then the chord
-    /// picker opens to add the next.
-    private func startFromScratch(_ page: ScrollViewProxy) {
+    /// A groove of just the key's one chord, in the key and style playing now (the chord picker
+    /// then opens to add the next).
+    private func startFromScratch() {
         let style: BackingStyle = groove.style == .shuffle || groove.style == .waltz ? .strummed : groove.style
-        withAnimation(.easeInOut(duration: 0.2)) {
-            groove = SoloGroove(keyRoot: groove.keyRoot, isMinor: groove.isMinor, chords: [ChordSymbol(degree: 1)],
-                                form: .loop, style: style, bpm: style.defaultBPM, barsPerChord: 1,
-                                scale: groove.isMinor ? .minor : .major, presetID: nil)
-        }
-        withAnimation(.easeInOut(duration: 0.3)) { page.scrollTo(Self.chordsID, anchor: .top) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { picking = .add }
+        groove = SoloGroove(keyRoot: groove.keyRoot, isMinor: groove.isMinor, chords: [ChordSymbol(degree: 1)],
+                            form: .loop, style: style, bpm: style.defaultBPM, barsPerChord: 1,
+                            scale: groove.isMinor ? .minor : .major, presetID: nil)
     }
 
     // MARK: - Now playing
@@ -291,11 +186,7 @@ struct SoloBuddyView: View {
         let barIndex = track.bar ?? 0
         let current = groove.chord(groove.symbol(forBar: barIndex))
         let next = groove.chord(groove.symbol(forBar: barIndex + 1))
-        let grooveName = SoloPreset.preset(groove.presetID)?.name ?? "Your Groove"
         return VStack(spacing: 8) {
-            Text("\(grooveName) · \(groove.keyName)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             if track.isCountingIn {
                 Text("\(track.beat + 1)")
                     .font(.system(size: 46, weight: .bold, design: .rounded))
@@ -694,6 +585,315 @@ struct SoloBuddyView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.bar)
+    }
+}
+
+// MARK: - GroovesSheet
+
+/// The Grooves sheet: the groove playing (save it, or save changes to one you saved), Start From
+/// Scratch, your saved grooves (swipe to rename or delete), and the presets. Picking one plays it.
+private struct GroovesSheet: View {
+
+    let groove: SoloGroove
+    @Binding var saved: [SavedGroove]
+    let onPick: (SoloGroove) -> Void
+    let onStartFromScratch: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private enum Naming: Equatable {
+        case new
+        case rename(UUID)
+    }
+
+    @State private var naming: Naming? = nil
+    @State private var nameDraft = ""
+    @State private var deleting: SavedGroove? = nil
+    /// Picked while the groove playing isn't saved: asks first.
+    @State private var pendingPick: SoloGroove? = nil
+    @State private var pickAfterSaving: SoloGroove? = nil
+
+    // MARK: Names
+
+    /// Its saved name, its preset's, or "New Groove".
+    static func name(of groove: SoloGroove, saved: [SavedGroove]) -> String {
+        if let id = groove.savedID, let mine = saved.first(where: { $0.id == id }) { return mine.name }
+        return SoloPreset.preset(groove.presetID)?.name ?? "New Groove"
+    }
+
+    /// "A Minor · Fingerpicked · 95 BPM".
+    static func detail(of groove: SoloGroove) -> String {
+        "\(groove.keyName) · \(groove.style.displayName) · \(groove.bpm) BPM"
+    }
+
+    /// Opened from a saved groove and changed since.
+    static func hasUnsavedChanges(_ groove: SoloGroove, saved: [SavedGroove]) -> Bool {
+        guard let id = groove.savedID, let mine = saved.first(where: { $0.id == id }) else { return false }
+        return !mine.groove.sameMusic(as: groove)
+    }
+
+    /// "Am – G – F – E", or the 12-bar blues.
+    static func chordList(_ groove: SoloGroove) -> String {
+        groove.form == .twelveBar
+            ? "The 12-bar blues"
+            : groove.chords.map { groove.chord($0).name }.joined(separator: " – ")
+    }
+
+    private var current: SavedGroove? {
+        groove.savedID.flatMap { id in saved.first { $0.id == id } }
+    }
+
+    private var hasChanges: Bool { Self.hasUnsavedChanges(groove, saved: saved) }
+
+    /// Worth asking about before it's replaced: changed from a preset or a saved groove, or made
+    /// from scratch beyond its first chord.
+    private var isUnsavedWork: Bool {
+        guard groove.presetID == nil else { return false }
+        if current != nil { return hasChanges }
+        if saved.contains(where: { $0.groove.sameMusic(as: groove) }) { return false }
+        return !(groove.form == .loop && groove.chords.count <= 1)
+    }
+
+    // MARK: Body
+
+    var body: some View {
+        NavigationStack {
+            List {
+                playingNow
+                mine
+                ForEach(SoloPreset.Group.allCases, id: \.self) { group in
+                    Section(group.rawValue) {
+                        ForEach(SoloPreset.all.filter { $0.group == group }) { preset in
+                            row(title: preset.name, subtitle: preset.detail, detail: Self.detail(of: preset.groove),
+                                isOn: groove.presetID == preset.id) {
+                                pick(preset.groove)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Grooves")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .alert(namingTitle, isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil } })) {
+                TextField("Name", text: $nameDraft)
+                Button("Save") { finishNaming() }
+                Button("Cancel", role: .cancel) { pickAfterSaving = nil }
+            }
+            .confirmationDialog("Save \u{201C}\(Self.name(of: groove, saved: saved))\u{201D} first?",
+                                isPresented: Binding(get: { pendingPick != nil }, set: { if !$0 { pendingPick = nil } }),
+                                titleVisibility: .visible) {
+                Button(current != nil ? "Save Changes" : "Save It") {
+                    let next = pendingPick
+                    if let current {
+                        update(current)
+                        if let next { play(next) }
+                    } else {
+                        pickAfterSaving = next
+                        startNaming(.new)
+                    }
+                }
+                Button("Don't Save", role: .destructive) {
+                    if let next = pendingPick { play(next) }
+                }
+            } message: {
+                Text("The groove playing has changes that aren't saved.")
+            }
+            .confirmationDialog(deleting.map { "Delete \u{201C}\($0.name)\u{201D}?" } ?? "",
+                                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                                titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    if let deleting { saved.removeAll { $0.id == deleting.id } }
+                }
+            }
+        }
+    }
+
+    private var playingNow: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(Self.name(of: groove, saved: saved))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                    if hasChanges {
+                        Text("Edited")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                    }
+                }
+                Text(Self.chordList(groove))
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                Text(Self.detail(of: groove))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
+
+            if let current, hasChanges {
+                Button {
+                    update(current)
+                } label: {
+                    Label("Save Changes to \u{201C}\(current.name)\u{201D}", systemImage: "square.and.arrow.down")
+                }
+            }
+            if current == nil || hasChanges {
+                Button {
+                    startNaming(.new)
+                } label: {
+                    Label(current == nil ? "Save This Groove…" : "Save as a New Groove…", systemImage: "plus.square.on.square")
+                }
+            }
+            Button {
+                dismiss()
+                onStartFromScratch()
+            } label: {
+                Label("Start From Scratch", systemImage: "square.and.pencil")
+            }
+        } header: {
+            Text("Playing Now")
+        }
+    }
+
+    private var mine: some View {
+        Section {
+            if saved.isEmpty {
+                Text("Grooves you save show up here, ready to play.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(saved) { item in
+                row(title: item.name, subtitle: Self.chordList(item.groove), detail: Self.detail(of: item.groove),
+                    isOn: groove.savedID == item.id) {
+                    pick(item.playable)
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        deleting = item
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    Button {
+                        startNaming(.rename(item.id))
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    .tint(.indigo)
+                }
+                .contextMenu {
+                    Button {
+                        startNaming(.rename(item.id))
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        deleting = item
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+        } header: {
+            Text("My Grooves")
+        } footer: {
+            if !saved.isEmpty { Text("Swipe left on one to rename or delete it.") }
+        }
+    }
+
+    private func row(title: String, subtitle: String, detail: String, isOn: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: 8)
+                if isOn {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    // MARK: Actions
+
+    /// Plays `next`, asking first if the groove playing has unsaved work.
+    private func pick(_ next: SoloGroove) {
+        if isUnsavedWork && !next.sameMusic(as: groove) {
+            pendingPick = next
+        } else {
+            play(next)
+        }
+    }
+
+    private func play(_ next: SoloGroove) {
+        onPick(next)
+        dismiss()
+    }
+
+    private var namingTitle: String {
+        if case .rename = naming { return "Rename Groove" }
+        return "Save Groove"
+    }
+
+    private func startNaming(_ what: Naming) {
+        switch what {
+        case .new:
+            let base = groove.presetID != nil || current != nil ? Self.name(of: groove, saved: saved) : "My Groove"
+            nameDraft = SavedGrooves.unusedName(base, in: saved)
+        case .rename(let id):
+            nameDraft = saved.first { $0.id == id }?.name ?? ""
+        }
+        naming = what
+    }
+
+    private func finishNaming() {
+        let name = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let what = naming else { return }
+        switch what {
+        case .new:
+            let item = SavedGroove(name: name, groove: groove)
+            saved.insert(item, at: 0)
+            // The groove playing is now that saved one.
+            onPick(item.playable)
+            if let next = pickAfterSaving {
+                pickAfterSaving = nil
+                play(next)
+            }
+        case .rename(let id):
+            if let index = saved.firstIndex(where: { $0.id == id }) { saved[index].name = name }
+        }
+    }
+
+    private func update(_ item: SavedGroove) {
+        guard let index = saved.firstIndex(where: { $0.id == item.id }) else { return }
+        var music = groove
+        music.savedID = nil
+        music.presetID = nil
+        saved[index].groove = music
+        saved[index].savedAt = .now
+        saved.sort { $0.savedAt > $1.savedAt }
     }
 }
 

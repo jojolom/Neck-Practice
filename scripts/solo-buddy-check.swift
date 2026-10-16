@@ -143,6 +143,30 @@ struct SoloBuddyCheck {
             let data = try! JSONEncoder().encode(preset.groove)
             check(try! JSONDecoder().decode(SoloGroove.self, from: data) == preset.groove, "\(preset.name): saves and loads")
         }
+        // A groove saved before `savedID` existed still loads.
+        var old = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(SoloPreset.all[0].groove)) as! [String: Any]
+        old.removeValue(forKey: "savedID")
+        let oldGroove = try? JSONDecoder().decode(SoloGroove.self, from: JSONSerialization.data(withJSONObject: old))
+        check(oldGroove?.sameMusic(as: SoloPreset.all[0].groove) == true, "a groove saved by 1.5's first builds loads")
+
+        // Saved grooves: kept by name, played as themselves, renamed without clashing.
+        let defaults = UserDefaults(suiteName: "solo-buddy-check")!
+        defaults.removePersistentDomain(forName: "solo-buddy-check")
+        let first = SavedGroove(name: "Mine", groove: SoloPreset.all[3].groove)
+        SavedGrooves.store([first], defaults)
+        let loaded = SavedGrooves.load(defaults)
+        check(loaded == [first], "saved grooves load back")
+        check(first.playable.savedID == first.id && first.playable.presetID == nil, "a saved groove plays as itself")
+        check(first.playable.sameMusic(as: SoloPreset.all[3].groove), "a saved groove keeps its music")
+        check(SavedGrooves.unusedName("Mine", in: loaded) == "Mine 2", "a new name doesn't clash")
+        // Your Groove from a TestFlight build is kept as a saved groove, once.
+        defaults.set(try! JSONEncoder().encode(SoloPreset.all[5].groove), forKey: SavedGrooves.oldYourGrooveKey)
+        let migrated = SavedGrooves.load(defaults)
+        check(migrated.count == 2 && migrated.contains { $0.name == "My Groove" && $0.groove.sameMusic(as: SoloPreset.all[5].groove) },
+              "Your Groove becomes a saved groove")
+        check(defaults.data(forKey: SavedGrooves.oldYourGrooveKey) == nil && SavedGrooves.load(defaults).count == 2,
+              "and only once")
+        defaults.removePersistentDomain(forName: "solo-buddy-check")
         print("ok   saving")
     }
 
