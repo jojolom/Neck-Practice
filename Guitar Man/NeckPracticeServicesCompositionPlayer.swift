@@ -9,7 +9,8 @@
 //  Each chord sounds once, on its beat, and rings for its length (rests are silent): its notes
 //  either all at once or as an arpeggio (low to high, an eighth note apart, each left ringing).
 //  A melody plays over it, a little louder than the chords. Everything goes to AudioPlayer as
-//  one timeline, so it keeps exact time; the staff highlight follows along on the main thread.
+//  one timeline, so it keeps exact time; the staff highlight follows along on the main thread,
+//  and `clock` lets the staff draw a playhead sweeping through the beats.
 //
 
 import AVFoundation
@@ -48,7 +49,19 @@ final class CompositionPlayer {
     private(set) var playingChord: Int?
     /// Start eighth of the melody note being heard, or nil.
     private(set) var playingNote: Int?
+    /// The measure being played (rests included), or nil.
+    private(set) var playingMeasure: Int?
+    /// When the first beat sounded and how long a beat is, while playing: where the playhead is.
+    private(set) var clock: Playhead?
     private(set) var isPlaying = false
+
+    /// The beat sounding at a moment (fractional, from 0), for drawing a playhead.
+    struct Playhead: Equatable {
+        let start: Date
+        let secondsPerBeat: Double
+
+        func beat(at date: Date) -> Double { max(0, date.timeIntervalSince(start) / secondsPerBeat) }
+    }
 
     private var task: Task<Void, Never>?
     private var interruptionObserver: (any NSObjectProtocol)?
@@ -62,20 +75,28 @@ final class CompositionPlayer {
 
         // Highlight each chord and note while it sounds, and nothing in the rests between:
         // (time in eighths, which line, start or nil to clear).
-        var events: [(tick: Int, isChord: Bool, start: Int?)] = []
+        // (A measure event sets `playingMeasure` and nothing else.)
+        var events: [(tick: Int, isChord: Bool, start: Int?, measure: Int?)] = []
         for chord in composition.chords {
-            events.append((chord.start * 2, true, chord.start))
-            if !composition.chords.contains(where: { $0.start == chord.end }) { events.append((chord.end * 2, true, nil)) }
+            events.append((chord.start * 2, true, chord.start, nil))
+            if !composition.chords.contains(where: { $0.start == chord.end }) { events.append((chord.end * 2, true, nil, nil)) }
         }
         for note in composition.melody {
-            events.append((note.start, false, note.start))
-            if !composition.melody.contains(where: { $0.start == note.end }) { events.append((note.end, false, nil)) }
+            events.append((note.start, false, note.start, nil))
+            if !composition.melody.contains(where: { $0.start == note.end }) { events.append((note.end, false, nil, nil)) }
+        }
+        let end = events.map(\.tick).max() ?? 0
+        // Each measure as it's reached, through to the one the piece ends in.
+        let eighthsPerMeasure = composition.eighthsPerMeasure
+        for measure in 0..<max((end + eighthsPerMeasure - 1) / eighthsPerMeasure, 1) {
+            events.append((measure * eighthsPerMeasure, false, nil, measure))
         }
         // Clearing first, so a chord ending where another starts doesn't blank the new one.
         events.sort { $0.tick != $1.tick ? $0.tick < $1.tick : ($0.start == nil && $1.start != nil) }
-        let end = events.map(\.tick).max() ?? 0
 
         isPlaying = true
+        clock = Playhead(start: .now, secondsPerBeat: beat)
+        playingMeasure = 0
         interruptionObserver = AudioSessionSetup.observe(AVAudioSession.interruptionNotification) { [weak self] _ in
             self?.stop()
         }
@@ -86,7 +107,13 @@ final class CompositionPlayer {
             do {
                 for event in events {
                     try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(event.tick))))
-                    if event.isChord { self?.playingChord = event.start } else { self?.playingNote = event.start }
+                    if let measure = event.measure {
+                        self?.playingMeasure = measure
+                    } else if event.isChord {
+                        self?.playingChord = event.start
+                    } else {
+                        self?.playingNote = event.start
+                    }
                 }
                 try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(end))))
             } catch {
@@ -110,6 +137,8 @@ final class CompositionPlayer {
         isPlaying = false
         playingChord = nil
         playingNote = nil
+        playingMeasure = nil
+        clock = nil
     }
 
     /// Every note of the progression on one timeline (seconds from the start).

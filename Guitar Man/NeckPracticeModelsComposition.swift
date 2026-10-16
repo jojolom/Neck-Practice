@@ -457,6 +457,14 @@ final class CompositionStore {
         persist()
     }
 
+    /// Renames a saved composition, leaving its place in the list (a new name isn't an edit).
+    func rename(_ id: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = compositions.firstIndex(where: { $0.id == id }) else { return }
+        compositions[index].name = trimmed
+        persist()
+    }
+
     /// `base` if no saved composition has that name yet, else "base 2", "base 3"…, so new
     /// compositions can be told apart in the list.
     func unusedName(_ base: String) -> String {
