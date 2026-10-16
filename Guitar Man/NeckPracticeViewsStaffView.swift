@@ -46,6 +46,9 @@ struct StaffView: View {
     var edgeToEdge = false
     /// Distance between two staff lines; everything else scales from it.
     var lineSpacing: CGFloat = 10
+    /// Text above (and below) every column sits on one line, clear of any stem, like a lead
+    /// sheet, instead of hugging each column's notes. Staffs laid side by side then line up too.
+    var alignsLabels = false
 
     /// Width of the clef, key signature, and time signature, for laying a staff out from pieces
     /// (a header followed by one StaffView per slot, as the Composition screen does).
@@ -236,15 +239,19 @@ struct StaffView: View {
 
         // ── Text above / below ──
         let font = Font.system(size: s * 1.3, weight: .semibold, design: .rounded)
+        // Aligned, the lines are where an up stem from the middle of the staff ends (or a down
+        // one starts), so only notes far off the staff push their own text further out.
         if let above = column.above {
             var top = min(y(8, in: size), y(highest, in: size))
             if column.value.hasStem && stemUp && !positions.isEmpty { top = min(top, y(highest, in: size) - stemLength) }
+            if alignsLabels { top = min(top, y(6, in: size) - stemLength) }
             context.draw(Text(above).font(font).foregroundColor(column.aboveColor ?? Color(.label)),
                          at: CGPoint(x: x, y: top - s * 1.3), anchor: .center)
         }
         if let below = column.below {
             var bottom = max(y(0, in: size), y(lowest, in: size))
             if column.value.hasStem && !stemUp && !positions.isEmpty { bottom = max(bottom, y(lowest, in: size) + stemLength) }
+            if alignsLabels { bottom = max(bottom, y(2, in: size) + stemLength) }
             context.draw(Text(below).font(font).foregroundColor(Color(.secondaryLabel)),
                          at: CGPoint(x: x, y: bottom + s * 1.5), anchor: .center)
         }

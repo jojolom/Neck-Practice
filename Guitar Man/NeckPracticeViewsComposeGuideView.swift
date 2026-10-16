@@ -61,7 +61,7 @@ struct ComposeGuideView: View {
 
     private var basics: some View {
         GuideSection(symbol: "slider.horizontal.3", title: "The basics") {
-            GuideText("At the top, pick the **key** (and major or minor), the **time** — 4/4 or 3/4 — and how many **measures**, from 2 to 16.")
+            GuideText("At the top, pick the **key** (and major or minor), the **time** — 4/4 or 3/4 — and how many **measures**, from 2 to 16. Once there's something on the staff they fold up to one line; tap **Change** to open them again.")
             GuideText("Chords are written as Roman numerals, which say where a chord sits in the key rather than its letter name. So when you change the key, the whole piece moves with it: I–IV–V in C is C, F, G; in G it's G, C, D.")
             GuideText("Everything saves on its own as soon as there's something on the staff. Your compositions are listed on the Compose screen; swipe one left to delete it.")
             GuideText("A short tour of the editor opens the first time you open a composition after starting the app. Turn it off, or take it again, in **Compose Settings**.")

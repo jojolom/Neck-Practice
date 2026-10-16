@@ -457,6 +457,16 @@ final class CompositionStore {
         persist()
     }
 
+    /// `base` if no saved composition has that name yet, else "base 2", "base 3"…, so new
+    /// compositions can be told apart in the list.
+    func unusedName(_ base: String) -> String {
+        let names = Set(compositions.map(\.name))
+        guard names.contains(base) else { return base }
+        var number = 2
+        while names.contains("\(base) \(number)") { number += 1 }
+        return "\(base) \(number)"
+    }
+
     private func persist() {
         if let data = try? JSONEncoder().encode(compositions) {
             UserDefaults.standard.set(data, forKey: Self.key)

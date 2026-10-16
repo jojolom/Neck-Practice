@@ -77,7 +77,7 @@ struct CompositionListView: View {
         .navigationDestination(for: Route.self) { route in
             switch route {
             case .new:
-                CompositionEditorView(composition: Composition(), store: store)
+                CompositionEditorView(composition: newComposition(), store: store)
             case .saved(let id):
                 if let composition = store.compositions.first(where: { $0.id == id }) {
                     CompositionEditorView(composition: composition, store: store)
@@ -86,7 +86,7 @@ struct CompositionListView: View {
                 templateList
             case .template(let id):
                 if let template = CompositionTemplate.all.first(where: { $0.id == id }) {
-                    CompositionEditorView(composition: template.makeComposition(), store: store)
+                    CompositionEditorView(composition: newComposition(from: template), store: store)
                 }
             }
         }
@@ -116,6 +116,13 @@ struct CompositionListView: View {
         }
         .navigationTitle("Start From a Progression")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// A blank composition (or one from `template`) with a name no saved one has.
+    private func newComposition(from template: CompositionTemplate? = nil) -> Composition {
+        var composition = template?.makeComposition() ?? Composition()
+        composition.name = store.unusedName(template?.name ?? "Untitled")
+        return composition
     }
 
     private func summary(of composition: Composition) -> String {
@@ -161,14 +168,18 @@ struct CompositionEditorView: View {
     @State private var alteration = 0
     @AppStorage("compose.melodyValue") private var melodyValue: NoteValue = .quarter
 
-    /// "Shortened to fit" after a placement, briefly.
+    /// "Shortened to fit" after a placement (or what to do first), briefly.
     @State private var hint: String? = nil
+    @State private var hintSymbol = "arrow.left.and.right.square"
     @State private var hintTask: Task<Void, Never>? = nil
     @State private var targetedSlot: Int? = nil
     @State private var showRename = false
     @State private var nameDraft = ""
     @State private var showPlayAlong = false
     @State private var showGuide = false
+    /// Key, time and measures open (they start open on an empty composition, where they're
+    /// set first, and folded to one line on one that's been written, to give the staff room).
+    @State private var settingsExpanded: Bool
 
     // Undo and redo: every change to the composition, whatever made it.
     @State private var history: [Composition] = []
@@ -190,6 +201,7 @@ struct CompositionEditorView: View {
     init(composition: Composition, store: CompositionStore) {
         self.store = store
         _composition = State(initialValue: composition)
+        _settingsExpanded = State(initialValue: composition.isEmpty)
     }
 
     var body: some View {
@@ -214,12 +226,11 @@ struct CompositionEditorView: View {
 
                     palette
 
-                    Text(mode == .chords
-                         ? "Drag a numeral onto a beat, or tap it and then tap the beat. Tap a numeral for its 7th and other versions; swipe the numerals for borrowed chords. Long-press a chord on the staff to change it, see where to play it, or copy its measure."
-                         : "Pick a note, then tap where it goes: each beat splits in two for eighth notes. Long-press a note on the staff to change its length or remove it.")
+                    Text(instructions)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 20)
+                        .animation(nil, value: instructions)
                 }
                 .padding(.vertical, 12)
                 // The tour scrolls each part it lights up into view.
@@ -234,7 +245,7 @@ struct CompositionEditorView: View {
         // "Shortened to fit", floating just above the buttons so it's seen wherever you've scrolled.
         .overlay(alignment: .bottom) {
             if let hint {
-                Label(hint, systemImage: "arrow.left.and.right.square")
+                Label(hint, systemImage: hintSymbol)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
@@ -357,8 +368,26 @@ struct CompositionEditorView: View {
         .background(.bar)
     }
 
+    /// What to do next, for what's picked now.
+    private var instructions: String {
+        switch mode {
+        case .chords:
+            if let symbol = selectedSymbol {
+                let chord = composition.chord(symbol)
+                return "Tap a beat to put \(chord.romanNumeral) (\(chord.name)) there, as many times as you like. Long-press a chord on the staff to change it or see where to play it."
+            }
+            return "Pick a chord (swipe them for more), then tap a beat to put it there, or drag it onto the beat."
+        case .melody:
+            if let degree = selectedNote {
+                return "Tap where \(melodyPitch(degree).name) goes: each beat splits in two for eighth notes. Long-press a note on the staff to change or remove it."
+            }
+            return "Pick a note, then tap where it goes, or drag it there."
+        }
+    }
+
     private func startTour(after delay: TimeInterval) {
         mode = .chords
+        settingsExpanded = true
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             withAnimation { tourStep = 0 }
         }
@@ -434,6 +463,39 @@ struct CompositionEditorView: View {
 
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { settingsExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("\(composition.keyName) · \(composition.meterName) · \(composition.measureCount) measures")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Text(settingsExpanded ? "Done" : "Change")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(settingsExpanded ? "Hides the key, time and measures" : "Shows the key, time and measures to change them")
+
+            if settingsExpanded {
+                Divider()
+                settingsRows
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, settingsExpanded ? 16 : 12)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var settingsRows: some View {
             HStack {
                 Text("Key")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -476,11 +538,6 @@ struct CompositionEditorView: View {
                 set: { composition.setMeasureCount($0) }
             ), in: Composition.measureRange)
             .font(.system(size: 15, weight: .semibold, design: .rounded))
-        }
-        .padding(16)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
     }
 
     private func keyLabel(_ note: Note) -> String {
@@ -886,19 +943,22 @@ struct CompositionEditorView: View {
     }
 
     private func placeChord(_ symbol: ChordSymbol?, at beat: Int) {
-        guard let symbol, let beats = composition.place(symbol, at: beat, value: noteValue) else { return }
+        guard let symbol else { return showHint("Pick a chord below first, then tap the beat.", symbol: "hand.point.down") }
+        guard let beats = composition.place(symbol, at: beat, value: noteValue) else { return }
         guard beats < noteValue.beats, let fitted = NoteValue(beats: beats) else { return }
         showHint("Shortened to a \(fitted.displayName.lowercased()) note to fit.")
     }
 
     private func placeNote(_ pitch: SpelledPitch?, at tick: Int) {
-        guard let pitch, let fitted = composition.placeNote(pitch, at: tick, value: melodyValue) else { return }
+        guard let pitch else { return showHint("Pick a note below first, then tap where it goes.", symbol: "hand.point.down") }
+        guard let fitted = composition.placeNote(pitch, at: tick, value: melodyValue) else { return }
         if fitted != melodyValue { showHint("Shortened to \(fitted == .eighth ? "an" : "a") \(fitted.displayName.lowercased()) note to fit.") }
     }
 
-    private func showHint(_ text: String) {
+    private func showHint(_ text: String, symbol: String = "arrow.left.and.right.square") {
         hintTask?.cancel()
         hint = text
+        hintSymbol = symbol
         hintTask = Task {
             try? await Task.sleep(for: .seconds(2.5))
             if !Task.isCancelled { hint = nil }
@@ -952,7 +1012,8 @@ struct CompositionStaffView: View {
 
     var body: some View {
         let key = composition.keySignature
-        VStack(spacing: 4) {
+        // Room between lines so one line's numerals don't run into the next line's chord names.
+        VStack(spacing: 12) {
             ForEach(Array(stride(from: 0, to: composition.measureCount, by: measuresPerLine)), id: \.self) { first in
                 let meter: Int? = first == 0 ? composition.beatsPerMeasure : nil
                 HStack(spacing: 0) {
@@ -980,7 +1041,7 @@ struct CompositionStaffView: View {
         return StaffView(keySignature: composition.keySignature,
                          columns: showsMelody ? melodyColumns(inMeasure: measure) : chordColumns(inMeasure: measure),
                          showsClef: false, showsKeySignature: false, showsEndBarline: true,
-                         edgeToEdge: true, lineSpacing: lineSpacing)
+                         edgeToEdge: true, lineSpacing: lineSpacing, alignsLabels: true)
             .frame(maxWidth: .infinity)
             .overlay {
                 if isEditable {
