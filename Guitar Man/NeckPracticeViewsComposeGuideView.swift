@@ -145,14 +145,14 @@ struct ComposeGuideView: View {
 
     private var melody: some View {
         GuideSection(symbol: "music.quarternote.3", title: "Writing a melody") {
-            GuideText("Switch to **Melody** under the staff. The numerals turn into the seven notes of your key, numbered by where they are in the scale. Tap a note to write it at the blue mark, then the next, like typing; tap the staff to move the mark, or drag a note where it goes.")
+            GuideText("Switch to **Melody** above the numerals. The numerals turn into the seven notes of your key, numbered by where they are in the scale. Tap a note to write it at the blue mark, then the next, like typing; tap the staff to move the mark, or drag a note where it goes.")
             GuideBullets([
                 "Each beat splits in two while you write a melody, so notes can start **on the beat or halfway through it** (the \"and\").",
                 "Lengths run from an **eighth** note to a **whole** note, including dotted quarters and dotted halves: use the length menu on the right.",
                 "The arrows next to the key's name move the notes **down or up an octave**.",
                 "**♭ Flat** and **♯ Sharp** lower or raise the next note you write by a half step, for notes outside the key. A sharp or flat lasts to the end of its measure, so going back to the plain note shows a **♮** natural, just as in printed music.",
             ])
-            GuideText("With a melody, the staff reads like a **lead sheet**: the melody's notes on the staff, each chord named above it and numbered below, one measure per line. You can keep adding chords: switch back to Chords and tap a beat.")
+            GuideText("With a melody, the staff reads like a **lead sheet**: the melody's notes on the staff, each chord named above it and numbered below, one measure per line, with the chord's notes faded behind the melody (turn that off with **Chords Under the Melody** in Compose Settings). You can keep adding chords: switch back to Chords and tap a beat.")
         }
     }
 

@@ -68,7 +68,7 @@ enum ComposeTour {
             Step(target: .length, symbol: "metronome", title: "How long each chord lasts",
                  text: "Pick the length before you write a chord: a quarter, half, dotted half or whole note. Gaps become rests."),
             Step(target: .mode, symbol: "music.quarternote.3", title: "Add a melody",
-                 text: "Switch to Melody to put single notes over your chords, from eighth notes to whole notes, sharps and flats included."),
+                 text: "Switch to Melody to put single notes over your chords, from eighth notes to whole notes, sharps and flats included. Your chords stay on the staff, faded behind the melody; turn that off in Compose Settings."),
             Step(target: .playAlong, symbol: "music.mic", title: "Play it",
                  text: hearPlayback
                     ? "Tap Play Along and play it on your guitar: the app listens and marks each chord green. The speaker button plays it for you first."
@@ -222,9 +222,13 @@ struct ComposeWalkthroughOverlay: View {
 
 struct ComposeSettingsView: View {
 
+    /// Faded chord notes behind the melody, on the staff.
+    static let chordsUnderMelodyKey = "compose.chordsUnderMelody"
+
     /// Close the settings and start the tour.
     let onShowTour: () -> Void
 
+    @AppStorage(Self.chordsUnderMelodyKey) private var chordsUnderMelody = true
     @AppStorage(ComposeTour.enabledKey) private var tourEnabled = true
     @AppStorage(CompositionPlayer.enabledKey) private var hearPlayback = false
     @AppStorage(CompositionPlayer.styleKey) private var playbackStyle: CompositionPlaybackStyle = .together
@@ -257,6 +261,14 @@ struct ComposeSettingsView: View {
                     }
                 } footer: {
                     Text("Adds a speaker button next to Play Along that plays your composition on the guitar, its chords all at once or as arpeggios, with the melody on top.")
+                }
+
+                Section {
+                    Toggle(isOn: $chordsUnderMelody) {
+                        Label("Chords Under the Melody", systemImage: "music.note.list")
+                    }
+                } footer: {
+                    Text("With a melody, the staff shows the melody's notes with each chord named above. This also draws the chord's notes, faded, behind the melody.")
                 }
 
                 Section {

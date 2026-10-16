@@ -276,6 +276,8 @@ struct CompositionEditorView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var player = CompositionPlayer()
     @State private var showSettings = false
+    /// Chords drawn faded behind the melody (Compose Settings).
+    @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
     /// The tour's step while it's showing (see ComposeTour).
     @State private var tourStep: Int? = nil
     @AppStorage(ComposeTour.enabledKey) private var tourEnabled = true
@@ -307,6 +309,7 @@ struct CompositionEditorView: View {
                         cursorSlot: player.isPlaying || tourStep != nil ? nil : (mode == .chords ? chordCursor : noteCursor),
                         playingMeasure: player.playingMeasure,
                         playhead: player.clock,
+                        showsChordsUnderMelody: chordsUnderMelody,
                         editing: editing
                     )
                     .padding(.horizontal, 12)
@@ -1226,6 +1229,8 @@ struct CompositionStaffView: View {
     var cursorSlot: Int? = nil
     var playingMeasure: Int? = nil
     var playhead: CompositionPlayer.Playhead? = nil
+    /// With a melody, draw each chord's notes faded behind it (Compose Settings).
+    var showsChordsUnderMelody = false
     var editing: Editing? = nil
 
     private let lineSpacing: CGFloat = 9
@@ -1358,6 +1363,10 @@ struct CompositionStaffView: View {
                 column.above = chord.name
                 column.below = chord.romanNumeral
                 column.aboveColor = chordColors[placed.start]
+                if showsChordsUnderMelody {
+                    column.ghostPitches = chord.pitches
+                    column.ghostValue = placed.value
+                }
             }
             if let note = composition.melody.first(where: { $0.start == tick }) {
                 column.pitches = [note.pitch]

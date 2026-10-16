@@ -29,6 +29,9 @@ struct StaffColumn: Identifiable {
     /// caller tracks a measure's accidentals (see MeasureAccidentals). Without it, a note gets a
     /// sign when it differs from the key signature.
     var accidentals: [Int?]? = nil
+    /// Notes drawn faded behind this column's own (a chord under a melody note), and how long.
+    var ghostPitches: [SpelledPitch] = []
+    var ghostValue: NoteValue = .whole
 }
 
 struct StaffView: View {
@@ -146,6 +149,12 @@ struct StaffView: View {
     }
 
     private func drawColumn(_ column: StaffColumn, x: CGFloat, size: CGSize, in context: inout GraphicsContext) {
+        // The faded notes first, so the column's own are drawn over them.
+        if !column.ghostPitches.isEmpty {
+            let ghost = StaffColumn(id: column.id, pitches: column.ghostPitches, value: column.ghostValue,
+                                    color: Color(.label).opacity(0.22))
+            drawColumn(ghost, x: x, size: size, in: &context)
+        }
         let s = lineSpacing
         let ink = column.color ?? Color(.label)
         let positions = column.pitches.map(\.staffPosition)
