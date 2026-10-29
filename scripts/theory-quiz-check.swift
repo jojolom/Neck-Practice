@@ -229,9 +229,15 @@ struct TheoryQuizCheck {
         case .scaleNotes(let key):
             check(answer == scale(tonic(key), minor: key.isMinor).map(name).joined(separator: " "), "scale notes: \(label)")
             check(q.prompt.contains(key.isMinor ? "natural minor scale" : "major scale"), "says which scale: \(label)")
-            for choice in choices where choice != answer {
-                check(!choice.contains("F♭") || answer.contains("F♭"), "no made-up F♭: \(label)")
-                check(!choice.contains("E♯") || answer.contains("E♯"), "no made-up E♯: \(label)")
+            // Wrong choices: the parallel scale, or this one with a single note a half step off
+            // that isn't just another natural note spelled oddly (F♭, C♭, E♯, B♯).
+            let answerNotes = answer.split(separator: " ").map(String.init)
+            let parallel = key.parallel.map { scale(tonic($0), minor: $0.isMinor).map(name).joined(separator: " ") }
+            for choice in choices where choice != answer && choice != parallel {
+                let notes = choice.split(separator: " ").map(String.init)
+                let changed = zip(notes, answerNotes).filter { $0 != $1 }.map(\.0)
+                check(notes.count == 7 && changed.count == 1 && !["F♭", "C♭", "E♯", "B♯"].contains(changed[0]),
+                      "\(choice) is the scale with one note a half step off: \(label)")
             }
 
         case .scaleDegree(let key, let degree):
