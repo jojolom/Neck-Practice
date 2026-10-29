@@ -74,6 +74,13 @@ extension ExerciseItem {
             isAvailable: true
         ),
         ExerciseItem(
+            title: "Theory Basics",
+            subtitle: "Quiz yourself on keys, scales & the circle of fifths",
+            icon: "questionmark.circle.fill",
+            color: .green,
+            isAvailable: true
+        ),
+        ExerciseItem(
             title: "Compose",
             subtitle: "Build chord progressions with Roman numerals, then play them",
             icon: "music.note.house.fill",
@@ -352,6 +359,7 @@ struct HomeView: View {
         case "Roman Numerals":     RomanNumeralView()
         case "Interval Trainer":    IntervalView()
         case "Mode Quiz":           ModeQuizView()
+        case "Theory Basics":       TheoryQuizView()
         case "Compose":             CompositionListView()
         default:                    EmptyView()
         }
