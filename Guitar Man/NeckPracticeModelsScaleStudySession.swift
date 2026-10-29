@@ -5,6 +5,8 @@
 //  Manages the 4-scale study cycle: start → relative → parallel → relative.
 //  Strings follow a 5-5-6-6 or 6-6-5-5 pattern (X, X, Y, Y): the relative stays on the
 //  same string as the scale before it, the parallel moves to the other string.
+//  Each scale is spelled from the one before it: a relative keeps the key signature and a
+//  parallel keeps the tonic's name, so F♯ major's relative is D♯ minor, never E♭ minor.
 //  Keys are chosen so every scale's root sits between frets 2 and 12 on its string (no
 //  open-string positions). Tempos keep every rhythm at or under 3 notes a second.
 //  Integrates rhythm assignment, BPM selection, and theory quizzing.
@@ -93,12 +95,21 @@ enum Rhythm: CaseIterable, Codable {
 
 struct ScaleEntry: Identifiable {
     let id = UUID()
-    let root: Note
+    /// The key's signature. With `isMajor` it names the tonic, spelled the way the chain reached
+    /// it: the relative minor of F♯ major is D♯ minor (six sharps), not E♭ minor.
+    let keySignature: KeySignature
     let isMajor: Bool
     /// How this scale relates to the previous one in the cycle.
     let relationship: String  // "Starting Scale", "Relative Minor", etc.
     /// Which string to play this scale on: 5 (A string) or 6 (low E).
     let string: Int
+
+    var tonic: (letter: Int, accidental: Int) {
+        isMajor ? keySignature.majorTonic : keySignature.minorTonic
+    }
+
+    /// The tonic's pitch class, for finding it on the fretboard.
+    var root: Note { SpelledPitch(letter: tonic.letter, accidental: tonic.accidental, octave: 4).note }
 
     /// Lowest and highest fret a scale's root may sit on: no open-string positions.
     static let fretRange = 2...12
@@ -113,8 +124,8 @@ struct ScaleEntry: Identifiable {
     }
 
     var qualityLabel: String { isMajor ? "Major" : "Minor" }
-    /// Key name with conventional spelling, e.g. "Bb Major" rather than "A# Major".
-    var fullLabel: String { "\(root.keyName(asMinor: !isMajor)) \(qualityLabel)" }
+    /// "B♭ Major", "D♯ Minor".
+    var fullLabel: String { isMajor ? keySignature.majorKeyName : keySignature.minorKeyName }
 
     /// Fret info for where to start on the assigned string.
     var rootFretInfo: String {
@@ -240,7 +251,7 @@ final class ScaleStudySession {
         for root in Note.allCases {
             for isMajor in [true, false] {
                 for x in [6, 5] {
-                    let chain = Self.chain(startRoot: root, startMajor: isMajor, startString: x)
+                    guard let chain = Self.chain(startRoot: root, startMajor: isMajor, startString: x) else { continue }
                     if chain.allSatisfy({ ScaleEntry.fretRange.contains($0.rootFret) }) {
                         candidates.append(chain)
                     }
@@ -248,7 +259,7 @@ final class ScaleStudySession {
             }
         }
         let entries = candidates.randomElement()
-            ?? Self.chain(startRoot: .c, startMajor: true, startString: 5)
+            ?? Self.chain(start: .cMajor, startMajor: true, startString: 5)!
         let x = entries[0].string, y = entries[2].string
 
         #if DEBUG
@@ -263,18 +274,34 @@ final class ScaleStudySession {
         round = entries
     }
 
+    /// The chain from `startRoot`, spelled as the app usually spells that key (E♭ major, C♯ minor)
+    /// unless the chain would then reach a key past seven sharps or flats: then the other spelling
+    /// (G♭ major rather than F♯ major, whose relative's parallel would be D♯ major, nine sharps).
+    static func chain(startRoot: Note, startMajor: Bool, startString x: Int) -> [ScaleEntry]? {
+        let usual = KeySignature(root: startRoot, isMinor: !startMajor)
+        let enharmonic = [usual.fifths - 12, usual.fifths + 12].filter { (-7...7).contains($0) }
+        for fifths in [usual.fifths] + enharmonic {
+            if let found = Self.chain(start: KeySignature(fifths: fifths), startMajor: startMajor, startString: x) {
+                return found
+            }
+        }
+        return nil
+    }
+
     /// Starting scale → its relative → that one's parallel → that one's relative, on strings
-    /// X, X, Y, Y.
-    static func chain(startRoot: Note, startMajor: Bool, startString x: Int) -> [ScaleEntry] {
+    /// X, X, Y, Y. A relative shares the signature; a parallel shares the tonic, three flats
+    /// further for minor (three sharps further for major). Nil if that passes seven.
+    static func chain(start: KeySignature, startMajor: Bool, startString x: Int) -> [ScaleEntry]? {
         let y = x == 6 ? 5 : 6
         func relative(of scale: ScaleEntry, string: Int) -> ScaleEntry {
-            scale.isMajor
-                ? ScaleEntry(root: scale.root.relativeMinor, isMajor: false, relationship: "Relative Minor", string: string)
-                : ScaleEntry(root: scale.root.relativeMajor, isMajor: true, relationship: "Relative Major", string: string)
+            ScaleEntry(keySignature: scale.keySignature, isMajor: !scale.isMajor,
+                       relationship: scale.isMajor ? "Relative Minor" : "Relative Major", string: string)
         }
-        let first = ScaleEntry(root: startRoot, isMajor: startMajor, relationship: "Starting Scale", string: x)
+        let first = ScaleEntry(keySignature: start, isMajor: startMajor, relationship: "Starting Scale", string: x)
         let second = relative(of: first, string: x)
-        let third = ScaleEntry(root: second.root, isMajor: !second.isMajor,
+        let parallelFifths = second.keySignature.fifths + (second.isMajor ? -3 : 3)
+        guard (-7...7).contains(parallelFifths) else { return nil }
+        let third = ScaleEntry(keySignature: KeySignature(fifths: parallelFifths), isMajor: !second.isMajor,
                                relationship: second.isMajor ? "Parallel Minor" : "Parallel Major", string: y)
         return [first, second, third, relative(of: third, string: y)]
     }
