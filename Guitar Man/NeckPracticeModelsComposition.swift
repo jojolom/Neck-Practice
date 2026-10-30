@@ -9,7 +9,7 @@
 //  Melody notes are single pitches from an eighth to a whole note, on any eighth. Each line
 //  keeps the same rules on its own: nothing crosses a barline or overlaps, so something that
 //  wouldn't fit is shortened to fit, and the gaps are rests, so every measure always adds up.
-//  The student plays it (the app only plays it with the hidden option in CompositionPlayer).
+//  The student plays it (the app plays it too with Hear Compositions on: see CompositionPlayer).
 //
 //  Saved compositions live in UserDefaults as JSON, like practice plans; ones saved before
 //  chords had their own lengths, or before chord kinds and melodies, load as the same music.
@@ -455,6 +455,24 @@ final class CompositionStore {
     func delete(_ id: UUID) {
         compositions.removeAll { $0.id == id }
         persist()
+    }
+
+    /// Renames a saved composition, leaving its place in the list (a new name isn't an edit).
+    func rename(_ id: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = compositions.firstIndex(where: { $0.id == id }) else { return }
+        compositions[index].name = trimmed
+        persist()
+    }
+
+    /// `base` if no saved composition has that name yet, else "base 2", "base 3"…, so new
+    /// compositions can be told apart in the list.
+    func unusedName(_ base: String) -> String {
+        let names = Set(compositions.map(\.name))
+        guard names.contains(base) else { return base }
+        var number = 2
+        while names.contains("\(base) \(number)") { number += 1 }
+        return "\(base) \(number)"
     }
 
     private func persist() {

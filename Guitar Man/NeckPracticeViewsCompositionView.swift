@@ -2,20 +2,28 @@
 //  CompositionView.swift
 //  Guitar Man
 //
-//  Compose: write a chord progression by dragging Roman numerals onto a staff (or tap a
-//  numeral, then tap where it goes), and optionally a melody over it. Pick the key, 4/4 or 3/4,
-//  2–16 measures, and the length of each chord or note as you place it; rests fill the gaps.
+//  Compose: write a chord progression in Roman numerals on a staff, and optionally a melody
+//  over it. Pick the key, 4/4 or 3/4, 2–16 measures, and the length of each chord or note as
+//  you write it; rests fill the gaps.
 //
-//  The palette stays one row of buttons however much it offers: tapping a numeral shows its
-//  versions (its 7th, sus chords, in minor the major V) as chips under the row; swiping the
-//  row goes to borrowed and secondary chords (♭VII, iv, V/V…); and the Chords | Melody switch
-//  swaps the numerals for the key's notes. Long-press a chord or note on the staff to change
+//  Writing is like typing: tapping a numeral (or a note) puts it at the cursor on the staff and
+//  moves the cursor past it, adding a measure at the end if need be. Tapping a beat moves the
+//  cursor there, and an empty beat also pops up the key's chords to pick from on the spot.
+//  Numerals can be dragged onto a beat too.
+//
+//  The palette is pinned above Play Along and stays one row of buttons however much it offers:
+//  after a numeral is tapped its versions (its 7th, sus chords, in minor the major V) show as
+//  chips under the row, and picking one changes the chord just written; swiping the row goes to
+//  borrowed and secondary chords (♭VII, iv, V/V…); and the Chords | Melody switch swaps the
+//  numerals for the key's notes. Long-press a chord or note on the staff to change
 //  its length or inversion, see where to play it, or duplicate or clear its measure; Undo,
-//  Redo and the How to Compose guide (ComposeGuideView) are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
+//  Redo, the How to Compose guide (ComposeGuideView) and Compose Settings are in the ⋯ menu. With a melody, the staff reads like a lead sheet: the melody's
 //  notes, with the chords named above and numbered below.
 //
 //  You play it, optionally with Play Along listening and marking each chord (or note) green.
-//  (Hidden Playback settings add a speaker button that plays it — see CompositionPlayer.)
+//  Hear Compositions, in Compose Settings, adds a speaker button that plays it (see
+//  CompositionPlayer), lighting each measure as it's reached with a playhead sweeping through. A tour (ComposeWalkthrough) lights up each part the first time a
+//  composition is opened each launch, until it's turned off.
 //  Compositions save automatically once they have something in them.
 //
 
@@ -35,6 +43,10 @@ struct CompositionListView: View {
     }
 
     @State private var store = CompositionStore()
+    /// The saved composition being renamed, and the name typed so far.
+    @State private var renaming: Composition? = nil
+    @State private var nameDraft = ""
+    @State private var deleting: Composition? = nil
 
     var body: some View {
         List {
@@ -52,30 +64,79 @@ struct CompositionListView: View {
             }
 
             if !store.compositions.isEmpty {
-                Section("Saved") {
+                Section {
                     ForEach(store.compositions) { composition in
                         NavigationLink(value: Route.saved(composition.id)) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(composition.name)
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text(composition.name)
+                                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                    Text(edited(composition.updatedAt))
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
                                 Text(summary(of: composition))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                         }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                deleting = composition
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            Button {
+                                startRenaming(composition)
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            .tint(.indigo)
+                        }
+                        .contextMenu {
+                            Button {
+                                startRenaming(composition)
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                deleting = composition
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
-                    .onDelete { offsets in
-                        for index in offsets { store.delete(store.compositions[index].id) }
-                    }
+                } header: {
+                    Text("Saved")
+                } footer: {
+                    Text("Swipe left on one to rename or delete it.")
                 }
             }
         }
         .navigationTitle("Compose")
+        .alert("Rename Composition", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $nameDraft)
+            Button("Save") {
+                if let renaming { store.rename(renaming.id, to: nameDraft) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(deleting.map { "Delete \u{201C}\($0.name)\u{201D}?" } ?? "",
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let deleting { store.delete(deleting.id) }
+            }
+        } message: {
+            Text("It can't be brought back.")
+        }
         .navigationDestination(for: Route.self) { route in
             switch route {
             case .new:
-                CompositionEditorView(composition: Composition(), store: store)
+                CompositionEditorView(composition: newComposition(), store: store)
             case .saved(let id):
                 if let composition = store.compositions.first(where: { $0.id == id }) {
                     CompositionEditorView(composition: composition, store: store)
@@ -84,7 +145,7 @@ struct CompositionListView: View {
                 templateList
             case .template(let id):
                 if let template = CompositionTemplate.all.first(where: { $0.id == id }) {
-                    CompositionEditorView(composition: template.makeComposition(), store: store)
+                    CompositionEditorView(composition: newComposition(from: template), store: store)
                 }
             }
         }
@@ -116,6 +177,27 @@ struct CompositionListView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// A blank composition (or one from `template`) with a name no saved one has.
+    private func newComposition(from template: CompositionTemplate? = nil) -> Composition {
+        var composition = template?.makeComposition() ?? Composition()
+        composition.name = store.unusedName(template?.name ?? "Untitled")
+        return composition
+    }
+
+    private func startRenaming(_ composition: Composition) {
+        nameDraft = composition.name
+        renaming = composition
+    }
+
+    /// "Today, 3:41 PM", "Yesterday", or a date, for when it was last changed.
+    private func edited(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return date.formatted(date: .omitted, time: .shortened) }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        let sameYear = calendar.isDate(date, equalTo: .now, toGranularity: .year)
+        return date.formatted(sameYear ? .dateTime.month(.abbreviated).day() : .dateTime.month(.abbreviated).day().year())
+    }
+
     private func summary(of composition: Composition) -> String {
         let numerals = composition.chords.map { composition.chord($0.symbol).romanNumeral }
         var parts = ["\(composition.keyName)", composition.meterName, "\(composition.measureCount) bars"]
@@ -145,7 +227,14 @@ struct CompositionEditorView: View {
 
     // Chord palette.
     @State private var palettePage = 0
+    /// The button tapped last: its versions show as chips.
     @State private var selectedSlot: PaletteSlot? = nil
+    /// Where that button's chord was written, so a chip can change it.
+    @State private var lastWritten: Int? = nil
+    /// The beat the next chord goes on (`totalBeats` past the end: the next adds a measure).
+    @State private var chordCursor: Int
+    /// The beat whose pop-up chord menu is open.
+    @State private var chordMenuBeat: Int? = nil
     /// The version each button is set to (its 7th, sus4…), once one's been picked.
     @State private var chosenVariants: [PaletteSlot: ChordSymbol] = [:]
     /// Length of the next chord placed.
@@ -153,72 +242,108 @@ struct CompositionEditorView: View {
 
     // Melody palette.
     @State private var selectedNote: Int? = nil
+    /// The eighth the next note goes on, like `chordCursor`.
+    @State private var noteCursor: Int
     /// −1, 0, 1: the octave the note buttons are in, low, middle (on the staff) or high.
     @AppStorage("compose.melodyRegister") private var register = 0
     /// −1, 0, 1: flat, as in the key, or sharp, for the next note placed.
     @State private var alteration = 0
     @AppStorage("compose.melodyValue") private var melodyValue: NoteValue = .quarter
 
-    /// "Shortened to fit" after a placement, briefly.
+    /// "Shortened to fit" after a placement (or what to do first), briefly.
     @State private var hint: String? = nil
+    @State private var hintSymbol = "arrow.left.and.right.square"
     @State private var hintTask: Task<Void, Never>? = nil
     @State private var targetedSlot: Int? = nil
     @State private var showRename = false
     @State private var nameDraft = ""
     @State private var showPlayAlong = false
     @State private var showGuide = false
+    /// Key, time and measures open (they start open on an empty composition, where they're
+    /// set first, and folded to one line on one that's been written, to give the staff room).
+    @State private var settingsExpanded: Bool
 
     // Undo and redo: every change to the composition, whatever made it.
     @State private var history: [Composition] = []
     @State private var future: [Composition] = []
     @State private var isRestoring = false
 
-    /// Hidden Playback settings (tap "Key" five times quickly): a speaker button that plays the
-    /// composition, its chords all at once or arpeggiated.
-    @AppStorage(CompositionPlayer.unlockedKey) private var playbackSettingsUnlocked = false
+    /// Hear Compositions (in Compose Settings): a speaker button that plays the composition,
+    /// its chords all at once or arpeggiated.
     @AppStorage(CompositionPlayer.enabledKey) private var hearPlayback = false
     @AppStorage(CompositionPlayer.styleKey) private var playbackStyle: CompositionPlaybackStyle = .together
     @AppStorage(CompositionPlayer.tempoKey) private var playbackTempo = CompositionPlayer.defaultTempo
     @Environment(\.scenePhase) private var scenePhase
     @State private var player = CompositionPlayer()
-    @State private var keyTaps = 0
-    @State private var lastKeyTap = Date.distantPast
+    @State private var showSettings = false
+    /// Chords drawn faded behind the melody (Compose Settings).
+    @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
+    /// The tour's step while it's showing (see ComposeTour).
+    @State private var tourStep: Int? = nil
+    @AppStorage(ComposeTour.enabledKey) private var tourEnabled = true
 
     init(composition: Composition, store: CompositionStore) {
         self.store = store
         _composition = State(initialValue: composition)
+        _settingsExpanded = State(initialValue: composition.isEmpty)
+        _chordCursor = State(initialValue: composition.chords.last?.end ?? 0)
+        _noteCursor = State(initialValue: composition.melody.last?.end ?? 0)
     }
+
+    private var showsMelody: Bool { composition.hasMelody || mode == .melody }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                settingsCard
+            ScrollViewReader { scroller in
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsCard
+                        .composeTourTarget(.settings)
+                        .id(ComposeTourTarget.settings)
 
-                CompositionStaffView(
-                    composition: composition,
-                    editingMelody: mode == .melody,
-                    chordColors: player.playingChord.map { [$0: Color.accentColor] } ?? [:],
-                    noteColors: player.playingNote.map { [$0: Color.accentColor] } ?? [:],
-                    targetedSlot: targetedSlot,
-                    editing: editing
-                )
-                .padding(.horizontal, 12)
+                    CompositionStaffView(
+                        composition: composition,
+                        editingMelody: mode == .melody,
+                        chordColors: player.playingChord.map { [$0: Color.accentColor] } ?? [:],
+                        noteColors: player.playingNote.map { [$0: Color.accentColor] } ?? [:],
+                        targetedSlot: targetedSlot,
+                        cursorSlot: player.isPlaying || tourStep != nil ? nil : (mode == .chords ? chordCursor : noteCursor),
+                        playingMeasure: player.playingMeasure,
+                        playhead: player.clock,
+                        showsChordsUnderMelody: chordsUnderMelody,
+                        editing: editing
+                    )
+                    .padding(.horizontal, 12)
+                    .composeTourTarget(.staff)
+                    .id(ComposeTourTarget.staff)
 
-                palette
-
-                Text(mode == .chords
-                     ? "Drag a numeral onto a beat, or tap it and then tap the beat. Tap a numeral for its 7th and other versions; swipe the numerals for borrowed chords. Long-press a chord on the staff to change it, see where to play it, or copy its measure."
-                     : "Pick a note, then tap where it goes: each beat splits in two for eighth notes. Long-press a note on the staff to change its length or remove it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
+                    Text(instructions)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
+                        .animation(nil, value: instructions)
+                }
+                .padding(.vertical, 12)
+                // The tour scrolls each part it lights up into view (the palette and Play Along
+                // are pinned below, always in view).
+                .onChange(of: tourStep) { _, step in
+                    let steps = ComposeTour.steps(hearPlayback: hearPlayback)
+                    guard let step, steps.indices.contains(step), let target = steps[step].target,
+                          [.settings, .staff].contains(target) else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { scroller.scrollTo(target, anchor: .center) }
+                }
+                // Keep the line being written, or played, in view.
+                .onChange(of: mode == .chords ? chordCursor : noteCursor) {
+                    scrollToMeasure(cursorMeasure, scroller)
+                }
+                .onChange(of: player.playingMeasure) { _, measure in
+                    if let measure { scrollToMeasure(measure, scroller) }
+                }
             }
-            .padding(.vertical, 12)
         }
         // "Shortened to fit", floating just above the buttons so it's seen wherever you've scrolled.
         .overlay(alignment: .bottom) {
             if let hint {
-                Label(hint, systemImage: "arrow.left.and.right.square")
+                Label(hint, systemImage: hintSymbol)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
@@ -230,7 +355,38 @@ struct CompositionEditorView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: hint)
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        // The palette, pinned over Play Along like a keyboard, so it stays under your thumb
+        // while the staff scrolls to follow what you write.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                palette
+                    .padding(.top, 10)
+                    .disabled(tourStep != nil)
+                bottomBar
+            }
+            .background(.bar)
+        }
+        .overlayPreferenceValue(ComposeTourAnchors.self) { anchors in
+            ComposeWalkthroughOverlay(steps: ComposeTour.steps(hearPlayback: hearPlayback), step: $tourStep,
+                                      anchors: anchors) { keepShowing in
+                tourEnabled = keepShowing
+                tourStep = nil
+            }
+        }
+        .toolbar(tourStep == nil ? .automatic : .hidden, for: .navigationBar)
+        .onAppear {
+            // The tour opens with the first composition opened since the app launched.
+            guard tourEnabled, !ComposeTour.shownThisLaunch else { return }
+            ComposeTour.shownThisLaunch = true
+            startTour(after: 0.5)
+        }
+        .sheet(isPresented: $showSettings) {
+            ComposeSettingsView {
+                showSettings = false
+                startTour(after: 0.6)
+            }
+        }
         // Playback is of what's on screen as it's set up now: any change stops it.
         .onDisappear { player.stop() }
         .onChange(of: playbackStyle) { player.stop() }
@@ -243,6 +399,7 @@ struct CompositionEditorView: View {
         .onChange(of: composition.isMinor) {
             chosenVariants = [:]
             selectedSlot = nil
+            lastWritten = nil
         }
         .navigationTitle(composition.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -277,6 +434,24 @@ struct CompositionEditorView: View {
             if !updated.isEmpty || store.compositions.contains(where: { $0.id == updated.id }) {
                 store.save(updated)
             }
+            chordCursor = min(chordCursor, updated.totalBeats)
+            noteCursor = min(noteCursor, updated.totalEighths)
+            // The first chord written: the key and time are set, so give the staff the room.
+            if old.isEmpty && !updated.isEmpty && settingsExpanded {
+                withAnimation(.easeInOut(duration: 0.25)) { settingsExpanded = false }
+            }
+        }
+    }
+
+    /// The measure the cursor is in (the last, when it's past the end).
+    private var cursorMeasure: Int {
+        let measure = mode == .chords ? chordCursor / composition.beatsPerMeasure : noteCursor / composition.eighthsPerMeasure
+        return min(measure, composition.measureCount - 1)
+    }
+
+    private func scrollToMeasure(_ measure: Int, _ scroller: ScrollViewProxy) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            scroller.scrollTo(CompositionStaffView.rowID(measure: measure, showsMelody: showsMelody))
         }
     }
 
@@ -315,9 +490,30 @@ struct CompositionEditorView: View {
             }
             .disabled(composition.isEmpty)
         }
+        .composeTourTarget(.playAlong)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.bar)
+    }
+
+    /// What to do next, for what's picked now.
+    private var instructions: String {
+        switch mode {
+        case .chords:
+            if let slot = selectedSlot, lastWritten != nil, variants(of: slot).count > 1 {
+                return "Tap a version under the chords to change the one you just wrote, or keep tapping chords. Long-press a chord on the staff to change its length or see where to play it."
+            }
+            return "Tap chords to write them one after another at the blue mark. Tap a beat to move the mark there; an empty beat shows the chords to pick from. Swipe the chords for more."
+        case .melody:
+            return "Tap notes to write them one after another at the blue mark: each beat splits in two for eighth notes. Tap the staff to move the mark; long-press a note to change or remove it."
+        }
+    }
+
+    private func startTour(after delay: TimeInterval) {
+        mode = .chords
+        settingsExpanded = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            withAnimation { tourStep = 0 }
+        }
     }
 
     private var moreMenu: some View {
@@ -326,6 +522,11 @@ struct CompositionEditorView: View {
                 showGuide = true
             } label: {
                 Label("How to Compose", systemImage: "book")
+            }
+            Button {
+                showSettings = true
+            } label: {
+                Label("Compose Settings", systemImage: "gearshape")
             }
             Section {
                 Button {
@@ -372,6 +573,7 @@ struct CompositionEditorView: View {
         future.append(composition)
         isRestoring = true
         composition = previous
+        pullCursorsBack()
     }
 
     private func redo() {
@@ -379,18 +581,56 @@ struct CompositionEditorView: View {
         history.append(composition)
         isRestoring = true
         composition = next
+        pullCursorsBack()
+    }
+
+    /// After an undo, carry on writing where the writing now ends (not after what was undone).
+    private func pullCursorsBack() {
+        chordCursor = min(chordCursor, composition.chords.last?.end ?? 0)
+        noteCursor = min(noteCursor, composition.melody.last?.end ?? 0)
+        lastWritten = nil
     }
 
     // MARK: - Settings
 
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { settingsExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("\(composition.keyName) · \(composition.meterName) · \(composition.measureCount) measures")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Text(settingsExpanded ? "Done" : "Change")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(settingsExpanded ? "Hides the key, time and measures" : "Shows the key, time and measures to change them")
+
+            if settingsExpanded {
+                Divider()
+                settingsRows
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, settingsExpanded ? 16 : 12)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var settingsRows: some View {
             HStack {
                 Text("Key")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .contentShape(Rectangle())
-                    .onTapGesture { tapKeyLabel() }
-                    .sensoryFeedback(.success, trigger: playbackSettingsUnlocked)
                 Spacer()
                 Picker("Key", selection: Binding(
                     get: { composition.keyRoot },
@@ -430,61 +670,6 @@ struct CompositionEditorView: View {
                 set: { composition.setMeasureCount($0) }
             ), in: Composition.measureRange)
             .font(.system(size: 15, weight: .semibold, design: .rounded))
-
-            if playbackSettingsUnlocked {
-                playbackSettings
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .padding(16)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
-    }
-
-    /// The hidden Playback settings.
-    private var playbackSettings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Divider()
-            Toggle(isOn: $hearPlayback) {
-                Label("Hear Compositions", systemImage: "speaker.wave.2")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-            }
-            if hearPlayback {
-                HStack(spacing: 10) {
-                    Picker("Playback Style", selection: $playbackStyle) {
-                        ForEach(CompositionPlaybackStyle.allCases) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 190)
-                    Spacer(minLength: 0)
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(playbackTempo)")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                        Text("BPM")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                    .fixedSize()
-                    Stepper("Tempo", value: $playbackTempo, in: CompositionPlayer.tempoRange, step: 5)
-                        .labelsHidden()
-                        .accessibilityValue("\(playbackTempo) beats per minute")
-                }
-            }
-        }
-    }
-
-    /// Five taps on "Key", each within a second of the last, shows or hides the Playback settings.
-    private func tapKeyLabel() {
-        let now = Date()
-        keyTaps = now.timeIntervalSince(lastKeyTap) < 1 ? keyTaps + 1 : 1
-        lastKeyTap = now
-        guard keyTaps >= 5 else { return }
-        keyTaps = 0
-        withAnimation(.spring(duration: 0.3)) { playbackSettingsUnlocked.toggle() }
     }
 
     private func keyLabel(_ note: Note) -> String {
@@ -506,6 +691,8 @@ struct CompositionEditorView: View {
             .frame(maxWidth: 220)
             .padding(.horizontal, 16)
             .padding(.bottom, 2)
+            .composeTourTarget(.mode)
+            .id(ComposeTourTarget.mode)
 
             switch mode {
             case .chords: chordPalette
@@ -574,6 +761,8 @@ struct CompositionEditorView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 58)
+            .composeTourTarget(.palette)
+            .id(ComposeTourTarget.palette)
 
             if let slot = selectedSlot, variants(of: slot).count > 1 {
                 variantChips(slot)
@@ -589,6 +778,8 @@ struct CompositionEditorView: View {
             .padding(.horizontal, 16)
             .padding(.top, 2)
             .accessibilityHint("The length of the next chord you place")
+            .composeTourTarget(.length)
+            .id(ComposeTourTarget.length)
         }
         .animation(.easeInOut(duration: 0.2), value: selectedSlot)
         // A whole note doesn't fit in 3/4.
@@ -647,9 +838,7 @@ struct CompositionEditorView: View {
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: 10))
-        .onTapGesture {
-            selectedSlot = isSelected ? nil : slot
-        }
+        .onTapGesture { write(slot) }
         .draggable(symbol.dragText) {
             Text("\(chord.romanNumeral)  \(chord.name)")
                 .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -660,10 +849,12 @@ struct CompositionEditorView: View {
                 .clipShape(Capsule())
         }
         .accessibilityLabel("\(chord.romanNumeral), \(chord.longName)")
+        .accessibilityHint("Writes it at the cursor")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    /// The selected button's versions: its plain chord, 7th, sus chords…
+    /// The selected button's versions: its plain chord, 7th, sus chords… Picking one changes the
+    /// chord the button just wrote, and what it writes from then on.
     private func variantChips(_ slot: PaletteSlot) -> some View {
         let current = symbol(for: slot)
         return ScrollView(.horizontal, showsIndicators: false) {
@@ -673,6 +864,7 @@ struct CompositionEditorView: View {
                     let isCurrent = variant == current
                     Button {
                         chosenVariants[slot] = variant
+                        if let start = lastWritten { composition.setSymbol(ofChordAt: start, to: variant) }
                     } label: {
                         HStack(spacing: 5) {
                             Text(chord.romanNumeral)
@@ -814,7 +1006,8 @@ struct CompositionEditorView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture {
-            selectedNote = isSelected ? nil : degree
+            selectedNote = degree
+            writeNote(pitch)
         }
         .draggable(Self.dragText(for: pitch)) {
             Text(pitch.name)
@@ -826,6 +1019,7 @@ struct CompositionEditorView: View {
                 .clipShape(Capsule())
         }
         .accessibilityLabel("\(pitch.name), scale note \(degree)")
+        .accessibilityHint("Writes it at the cursor")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -843,12 +1037,21 @@ struct CompositionEditorView: View {
     /// What the staff can do. Its slots are beats while writing chords, eighths while writing the melody.
     private var editing: CompositionStaffView.Editing {
         CompositionStaffView.Editing(
+            // A tap moves the cursor; on an empty beat it also offers the chords right there.
             onTap: { slot in
                 switch mode {
-                case .chords: placeChord(selectedSymbol, at: slot)
-                case .melody: placeNote(selectedNote.map(melodyPitch), at: slot)
+                case .chords:
+                    chordCursor = slot
+                    selectedSlot = nil
+                    lastWritten = nil
+                    if composition.chord(covering: slot) == nil { chordMenuBeat = slot }
+                case .melody:
+                    noteCursor = slot
                 }
             },
+            menuSlot: mode == .chords ? chordMenuBeat : nil,
+            onMenuDismiss: { chordMenuBeat = nil },
+            menu: { beat in AnyView(chordMenu(at: beat)) },
             onDrop: { slot, text in drop(text, at: slot) },
             onRemove: { slot in
                 switch mode {
@@ -870,33 +1073,112 @@ struct CompositionEditorView: View {
     }
 
     /// A chord or a note dropped on `slot`; either can go on either staff (a chord dropped on an
-    /// eighth goes on its beat).
+    /// eighth goes on its beat). The cursor moves on past it, as if it had been typed there.
     private func drop(_ text: String, at slot: Int) -> Bool {
         if let symbol = ChordSymbol(dragText: text) {
-            placeChord(symbol, at: mode == .melody ? slot / 2 : slot)
+            chordCursor = mode == .melody ? slot / 2 : slot
+            selectedSlot = nil
+            writeChord(symbol)
             return true
         }
         if let pitch = Self.pitch(fromDragText: text) {
-            placeNote(pitch, at: mode == .melody ? slot : slot * 2)
+            noteCursor = mode == .melody ? slot : slot * 2
+            writeNote(pitch)
             return true
         }
         return false
     }
 
-    private func placeChord(_ symbol: ChordSymbol?, at beat: Int) {
-        guard let symbol, let beats = composition.place(symbol, at: beat, value: noteValue) else { return }
-        guard beats < noteValue.beats, let fitted = NoteValue(beats: beats) else { return }
-        showHint("Shortened to a \(fitted.displayName.lowercased()) note to fit.")
+    /// The chord on palette button `slot`, written at the cursor; its versions show as chips.
+    private func write(_ slot: PaletteSlot) {
+        selectedSlot = slot
+        writeChord(symbol(for: slot))
     }
 
-    private func placeNote(_ pitch: SpelledPitch?, at tick: Int) {
-        guard let pitch, let fitted = composition.placeNote(pitch, at: tick, value: melodyValue) else { return }
-        if fitted != melodyValue { showHint("Shortened to \(fitted == .eighth ? "an" : "a") \(fitted.displayName.lowercased()) note to fit.") }
+    /// Writes `symbol` at the cursor for the chosen length (shortened to fit before the next
+    /// chord or the barline) and moves the cursor past it. Past the end, it adds a measure first.
+    private func writeChord(_ symbol: ChordSymbol) {
+        var updated = composition
+        let beat = min(chordCursor, updated.totalBeats)
+        if beat == updated.totalBeats {
+            guard updated.measureCount < Composition.measureRange.upperBound else {
+                return showHint("That's all \(Composition.measureRange.upperBound) measures. Tap a beat to write there.",
+                                symbol: "exclamationmark.circle")
+            }
+            updated.setMeasureCount(updated.measureCount + 1)
+        }
+        guard let beats = updated.place(symbol, at: beat, value: noteValue) else { return }
+        composition = updated
+        lastWritten = beat
+        chordCursor = beat + beats
+        if beats < noteValue.beats, let fitted = NoteValue(beats: beats) {
+            showHint("Shortened to a \(fitted.displayName.lowercased()) note to fit.")
+        }
     }
 
-    private func showHint(_ text: String) {
+    /// Writes `pitch` at the note cursor, like `writeChord`.
+    private func writeNote(_ pitch: SpelledPitch) {
+        var updated = composition
+        let tick = min(noteCursor, updated.totalEighths)
+        if tick == updated.totalEighths {
+            guard updated.measureCount < Composition.measureRange.upperBound else {
+                return showHint("That's all \(Composition.measureRange.upperBound) measures. Tap the staff to write there.",
+                                symbol: "exclamationmark.circle")
+            }
+            updated.setMeasureCount(updated.measureCount + 1)
+        }
+        guard let fitted = updated.placeNote(pitch, at: tick, value: melodyValue) else { return }
+        composition = updated
+        noteCursor = tick + fitted.eighths
+        if fitted != melodyValue {
+            showHint("Shortened to \(fitted == .eighth ? "an" : "a") \(fitted.displayName.lowercased()) note to fit.")
+        }
+    }
+
+    /// The key's chords (as their buttons are set), to write on the empty `beat` tapped.
+    private func chordMenu(at beat: Int) -> some View {
+        let beats = composition.beatsPerMeasure
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Measure \(beat / beats + 1), beat \(beat % beats + 1)")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(58), spacing: 6), count: 4), spacing: 6) {
+                ForEach(slots(onPage: 0), id: \.self) { slot in
+                    let chord = composition.chord(symbol(for: slot))
+                    Button {
+                        chordMenuBeat = nil
+                        chordCursor = beat
+                        write(slot)
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text(chord.romanNumeral)
+                                .font(.system(size: 16, weight: .bold, design: .serif))
+                            Text(chord.name)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(width: 58, height: 46)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 9))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(chord.longName)
+                }
+            }
+            Text("As a \(noteValue.displayName.lowercased()) note. More chords are in the row below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(width: 4 * 58 + 3 * 6 + 28)
+    }
+
+    private func showHint(_ text: String, symbol: String = "arrow.left.and.right.square") {
         hintTask?.cancel()
         hint = text
+        hintSymbol = symbol
         hintTask = Task {
             try? await Task.sleep(for: .seconds(2.5))
             if !Task.isCancelled { hint = nil }
@@ -913,14 +1195,20 @@ struct CompositionEditorView: View {
 /// numbered below where it starts. Accidentals last to the barline, as in print.
 ///
 /// With `editing`, every beat (or eighth) takes taps and drops, an empty measure shows a + on
-/// each beat to invite something, and a long-press menu changes what's there or its measure.
-/// Without it, it's read-only (Play Along), and `chordColors` (by start beat) and `noteColors`
-/// (by start eighth) tint chords and notes.
+/// each beat to invite something, a long-press menu changes what's there or its measure, the
+/// writing cursor (`cursorSlot`) is marked, and `menuSlot`'s beat pops up `menu` (the chords to
+/// pick from right there). Without it, it's read-only (Play Along). Either way `chordColors` (by
+/// start beat) and `noteColors` (by start eighth) tint chords and notes, and while a composition
+/// plays, `playingMeasure` is lit and `playhead` sweeps through it.
 struct CompositionStaffView: View {
 
     struct Editing {
         /// Slot (a beat, or an eighth when editing the melody) tapped.
         var onTap: (Int) -> Void
+        /// The slot whose pop-up menu is open, and closing it.
+        var menuSlot: Int? = nil
+        var onMenuDismiss: () -> Void = {}
+        var menu: (Int) -> AnyView = { _ in AnyView(EmptyView()) }
         /// Drag text dropped on a slot; returns whether it was taken.
         var onDrop: (_ slot: Int, _ text: String) -> Bool
         var onRemove: (Int) -> Void
@@ -937,9 +1225,21 @@ struct CompositionStaffView: View {
     var chordColors: [Int: Color] = [:]
     var noteColors: [Int: Color] = [:]
     var targetedSlot: Int? = nil
+    /// Where the next chord (or note) typed goes.
+    var cursorSlot: Int? = nil
+    var playingMeasure: Int? = nil
+    var playhead: CompositionPlayer.Playhead? = nil
+    /// With a melody, draw each chord's notes faded behind it (Compose Settings).
+    var showsChordsUnderMelody = false
     var editing: Editing? = nil
 
     private let lineSpacing: CGFloat = 9
+
+    /// The id of the line of staff `measure` is on, for scrolling to it.
+    static func rowID(measure: Int, showsMelody: Bool) -> String {
+        let perLine = showsMelody ? 1 : 2
+        return "staff.line.\(measure / perLine * perLine)"
+    }
 
     private var isEditable: Bool { editing != nil }
     /// Lead-sheet layout: the melody on the staff, chords as text.
@@ -950,7 +1250,8 @@ struct CompositionStaffView: View {
 
     var body: some View {
         let key = composition.keySignature
-        VStack(spacing: 4) {
+        // Room between lines so one line's numerals don't run into the next line's chord names.
+        VStack(spacing: 12) {
             ForEach(Array(stride(from: 0, to: composition.measureCount, by: measuresPerLine)), id: \.self) { first in
                 let meter: Int? = first == 0 ? composition.beatsPerMeasure : nil
                 HStack(spacing: 0) {
@@ -966,6 +1267,7 @@ struct CompositionStaffView: View {
                     }
                 }
                 .frame(height: 120)
+                .id(Self.rowID(measure: first, showsMelody: showsMelody))
             }
         }
     }
@@ -978,8 +1280,16 @@ struct CompositionStaffView: View {
         return StaffView(keySignature: composition.keySignature,
                          columns: showsMelody ? melodyColumns(inMeasure: measure) : chordColumns(inMeasure: measure),
                          showsClef: false, showsKeySignature: false, showsEndBarline: true,
-                         edgeToEdge: true, lineSpacing: lineSpacing)
+                         edgeToEdge: true, lineSpacing: lineSpacing, alignsLabels: true)
             .frame(maxWidth: .infinity)
+            .background {
+                // The measure playing, lit.
+                if playingMeasure == measure {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.accentColor.opacity(0.08))
+                        .padding(.vertical, 22)
+                }
+            }
             .overlay {
                 if isEditable {
                     HStack(spacing: 0) {
@@ -989,7 +1299,30 @@ struct CompositionStaffView: View {
                     }
                 }
             }
+            .overlay {
+                if playingMeasure == measure, let playhead {
+                    playheadLine(playhead, measure: measure)
+                }
+            }
             .accessibilityElement(children: isEditable ? .contain : .combine)
+    }
+
+    /// A line sweeping through the measure in time with the playback.
+    private func playheadLine(_ playhead: CompositionPlayer.Playhead, measure: Int) -> some View {
+        let beats = Double(composition.beatsPerMeasure)
+        return TimelineView(.animation) { context in
+            let into = playhead.beat(at: context.date) - Double(measure) * beats
+            GeometryReader { geo in
+                if (0..<beats).contains(into) {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 2.5, height: lineSpacing * 6)
+                        .position(x: geo.size.width * into / beats, y: geo.size.height / 2)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     /// Chords only: one column per beat.
@@ -1030,6 +1363,10 @@ struct CompositionStaffView: View {
                 column.above = chord.name
                 column.below = chord.romanNumeral
                 column.aboveColor = chordColors[placed.start]
+                if showsChordsUnderMelody {
+                    column.ghostPitches = chord.pitches
+                    column.ghostValue = placed.value
+                }
             }
             if let note = composition.melody.first(where: { $0.start == tick }) {
                 column.pitches = [note.pitch]
@@ -1056,19 +1393,54 @@ struct CompositionStaffView: View {
         let chord = editingMelody ? nil : composition.chord(covering: slot)
         let note = editingMelody ? composition.note(covering: slot) : nil
         let onBeat = !editingMelody || slot % 2 == 0
+        let isCursor = cursorSlot == slot
+        // Past the last slot: the next one written adds a measure, so the cursor waits at the end.
+        let lastSlot = composition.measureCount * slotsPerMeasure - 1
+        let cursorAfter = slot == lastSlot && cursorSlot == lastSlot + 1
         let cell = Rectangle()
             .fill(targetedSlot == slot ? Color.accentColor.opacity(0.18) : Color.clear)
             .overlay {
-                if emptyMeasure && onBeat {
+                if emptyMeasure && onBeat && !isCursor {
                     Image(systemName: "plus")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.tertiary)
-                } else if emptyMeasure && editingMelody {
+                } else if emptyMeasure && editingMelody && !isCursor {
                     Circle().fill(Color(.tertiaryLabel)).frame(width: 3, height: 3)
                 }
             }
+            // The cursor: a tinted slot with a bar at its start, where the next one typed goes.
+            .overlay(alignment: .leading) {
+                if isCursor {
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.accentColor.opacity(0.14))
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: 3)
+                    }
+                    .frame(height: lineSpacing * 6)
+                    .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if cursorAfter {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 3, height: lineSpacing * 6)
+                        .offset(x: 4)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: isCursor)
             .contentShape(Rectangle())
             .onTapGesture { editing?.onTap(slot) }
+            .popover(isPresented: Binding(
+                get: { editing?.menuSlot == slot },
+                set: { if !$0 { editing?.onMenuDismiss() } }
+            ), arrowEdge: .bottom) {
+                editing?.menu(slot)
+                    .presentationCompactAdaptation(.popover)
+            }
             .dropDestination(for: String.self) { items, _ in
                 guard let editing, let text = items.first else { return false }
                 return editing.onDrop(slot, text)
@@ -1081,7 +1453,8 @@ struct CompositionStaffView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel(slot: slot, chord: chord, note: note))
-            .accessibilityHint(editingMelody ? "Tap to place the selected note here" : "Tap to place the selected chord here")
+            .accessibilityHint(editingMelody ? "Tap to write the next note here"
+                               : chord == nil ? "Tap to pick a chord for this beat" : "Tap to write the next chord here")
 
         return Group {
             if chord != nil || note != nil {

@@ -22,6 +22,7 @@ struct CompositionPlayAlongView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var listener = ChordListener()
+    @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
     @State private var part: Part = .chords
     /// Index into the part's chords or notes of the one being listened for.
     @State private var current = 0
@@ -71,7 +72,8 @@ struct CompositionPlayAlongView: View {
 
                     CompositionStaffView(composition: composition,
                                          chordColors: part == .chords ? colors : [:],
-                                         noteColors: part == .melody ? colors : [:])
+                                         noteColors: part == .melody ? colors : [:],
+                                         showsChordsUnderMelody: chordsUnderMelody)
                         .padding(.horizontal, 12)
 
                     if listener.isListening && !isFinished {

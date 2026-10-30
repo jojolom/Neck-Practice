@@ -5,8 +5,7 @@
 //  How to Compose: the in-depth guide behind the Compose editor's ⋯ menu. Every feature of
 //  the editor, the theory behind it (Roman numerals, 7ths, borrowed and secondary chords,
 //  inversions), Play Along, and some ideas to try. The examples are drawn with the same staff
-//  and chord-chart views the editor uses, so they always match. (The hidden Playback settings
-//  are left out on purpose.)
+//  and chord-chart views the editor uses, so they always match.
 //
 
 import SwiftUI
@@ -42,6 +41,7 @@ struct ComposeGuideView: View {
                     melody
                     editing
                     playAlong
+                    hearIt
                     templates
                     ideas
                 }
@@ -61,18 +61,20 @@ struct ComposeGuideView: View {
 
     private var basics: some View {
         GuideSection(symbol: "slider.horizontal.3", title: "The basics") {
-            GuideText("At the top, pick the **key** (and major or minor), the **time** — 4/4 or 3/4 — and how many **measures**, from 2 to 16.")
+            GuideText("At the top, pick the **key** (and major or minor), the **time** — 4/4 or 3/4 — and how many **measures**, from 2 to 16. Once there's something on the staff they fold up to one line; tap **Change** to open them again.")
             GuideText("Chords are written as Roman numerals, which say where a chord sits in the key rather than its letter name. So when you change the key, the whole piece moves with it: I–IV–V in C is C, F, G; in G it's G, C, D.")
             GuideText("Everything saves on its own as soon as there's something on the staff. Your compositions are listed on the Compose screen; swipe one left to delete it.")
+            GuideText("A short tour of the editor opens the first time you open a composition after starting the app. Turn it off, or take it again, in **Compose Settings**.")
         }
     }
 
     private var placingChords: some View {
         GuideSection(symbol: "hand.tap", title: "Putting chords on the staff") {
-            GuideText("Make sure **Chords** is picked under the staff. Then either **drag** a numeral onto a beat, or **tap** a numeral and then tap the beat. Empty measures show a + on each beat.")
+            GuideText("Make sure **Chords** is picked above the numerals. Writing works like typing: **tap a numeral** and the chord goes on the staff at the **blue mark**, which then moves on past it. Keep tapping to write the next chords; past the last measure, a new one is added.")
+            GuideText("**Tap a beat** to move the mark there. On an empty beat (a + or a rest), the key's chords pop up so you can pick one right there. You can also **drag** a numeral onto any beat.")
             GuideText("The bar under the numerals sets how long the next chord lasts: a **quarter** (one beat), **half** (two), **dotted half** (three) or **whole** note (four). A chord can start on any beat.")
             GuideText("Nothing crosses a barline or overlaps. If a chord won't fit before the next chord or the end of the measure, it's shortened to fit, and the app tells you. Any beat with no chord is a **rest**, so every measure always adds up.")
-            GuideText("Placing a chord where one already starts replaces it.")
+            GuideText("Writing a chord where one already starts replaces it, so to change a chord, tap it and tap the new numeral.")
         }
     }
 
@@ -87,7 +89,7 @@ struct ComposeGuideView: View {
 
     private var versions: some View {
         GuideSection(symbol: "circle.grid.2x1", title: "7ths, sus chords and other versions") {
-            GuideText("A small dot on a numeral means it has other versions. **Tap the numeral** and they appear as chips underneath. Pick one and the button remembers it, so the next chords you place are that version.")
+            GuideText("A small dot on a numeral means it has other versions. **Tap the numeral** and they appear as chips underneath. Pick one and it changes the chord you just wrote, and the button remembers it, so the next chords you write are that version too.")
             GuideBullets([
                 "**7th chords** add a fourth note on top. Which kind depends on where the chord is in the key: **maj7** (I and IV in major, dreamy), **7** (V, the bluesy dominant 7th that wants to resolve), **m7** (ii, iii, vi, mellow), and **ø7**, half-diminished (vii in major, ii in minor).",
                 "**sus2** and **sus4** swap the chord's 3rd for the note just below or above it, for an open, unresolved sound. They're offered only where every note stays in the key.",
@@ -104,7 +106,7 @@ struct ComposeGuideView: View {
                 "**Secondary dominants** borrow a V for a chord other than I. **V/V** (\"five of five\", D in C) is the V of G, so it pulls toward V. **V/vi** (E) pulls toward vi, and **V/ii** (A) toward ii. Put one just before the chord it points to.",
                 "In a **minor key** the page has **V** and **vii°** (from harmonic minor, the strongest pull home), **IV** (the Dorian sound), **♭II** (the Neapolitan), a major **I** to end a minor piece brightly, and **V/V**.",
             ])
-            GuideText("Tap one of these to switch between the plain chord and its 7th.")
+            GuideText("After you write one of these, its 7th shows as a chip underneath to switch to.")
         }
     }
 
@@ -143,14 +145,14 @@ struct ComposeGuideView: View {
 
     private var melody: some View {
         GuideSection(symbol: "music.quarternote.3", title: "Writing a melody") {
-            GuideText("Switch to **Melody** under the staff. The numerals turn into the seven notes of your key, numbered by where they are in the scale. Pick a note, then tap where it goes, or drag it there.")
+            GuideText("Switch to **Melody** above the numerals. The numerals turn into the seven notes of your key, numbered by where they are in the scale. Tap a note to write it at the blue mark, then the next, like typing; tap the staff to move the mark, or drag a note where it goes.")
             GuideBullets([
                 "Each beat splits in two while you write a melody, so notes can start **on the beat or halfway through it** (the \"and\").",
                 "Lengths run from an **eighth** note to a **whole** note, including dotted quarters and dotted halves: use the length menu on the right.",
                 "The arrows next to the key's name move the notes **down or up an octave**.",
-                "**♭ Flat** and **♯ Sharp** lower or raise the next note you place by a half step, for notes outside the key. A sharp or flat lasts to the end of its measure, so going back to the plain note shows a **♮** natural, just as in printed music.",
+                "**♭ Flat** and **♯ Sharp** lower or raise the next note you write by a half step, for notes outside the key. A sharp or flat lasts to the end of its measure, so going back to the plain note shows a **♮** natural, just as in printed music.",
             ])
-            GuideText("With a melody, the staff reads like a **lead sheet**: the melody's notes on the staff, each chord named above it and numbered below, one measure per line. You can keep adding chords: switch back to Chords and tap a beat.")
+            GuideText("With a melody, the staff reads like a **lead sheet**: the melody's notes on the staff, each chord named above it and numbered below, one measure per line, with the chord's notes faded behind the melody (turn that off with **Chords Under the Melody** in Compose Settings). You can keep adding chords: switch back to Chords and tap a beat.")
         }
     }
 
@@ -176,6 +178,13 @@ struct ComposeGuideView: View {
                 "For a melody, play one note at a time and let it ring. Moving to a new note is enough; play a repeated note again.",
                 "The bars at the bottom show what the mic hears, note by note: the notes it's waiting for are in blue.",
             ])
+        }
+    }
+
+    private var hearIt: some View {
+        GuideSection(symbol: "speaker.wave.2", title: "Hearing your composition") {
+            GuideText("Turn on **Hear Compositions** in **Compose Settings** (in the **⋯** menu) and a speaker button appears next to Play Along. It plays your piece on the guitar, its chords all at once or as arpeggios, with the melody on top, at the tempo you set there.")
+            GuideText("Listen first, then play along: it's a good way to check a progression sounds the way you meant.")
         }
     }
 

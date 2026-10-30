@@ -80,6 +80,13 @@ extension ExerciseItem {
             color: .brown,
             isAvailable: true
         ),
+        ExerciseItem(
+            title: "Solo Buddy",
+            subtitle: "Jam over a backing track with the pentatonic scale",
+            icon: "guitars.fill",
+            color: .red,
+            isAvailable: true
+        ),
     ]
 }
 
@@ -353,6 +360,7 @@ struct HomeView: View {
         case "Interval Trainer":    IntervalView()
         case "Mode Quiz":           ModeQuizView()
         case "Compose":             CompositionListView()
+        case "Solo Buddy":          SoloBuddyView()
         default:                    EmptyView()
         }
     }

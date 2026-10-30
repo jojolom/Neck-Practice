@@ -31,11 +31,17 @@ final class AudioPlayer {
 
     /// A note for `play(_:)`: its MIDI number, when it starts (seconds after the call), how long
     /// it rings before fading out (nil for the default), and its loudness (1 = a single note).
+    /// `sound` makes it a metronome click instead (its MIDI number and duration are then ignored).
     struct ScheduledNote {
         var midi: Int
         var delay: TimeInterval = 0
         var duration: TimeInterval? = nil
         var gain: Float = 1
+        var sound: Sound = .guitar
+    }
+
+    enum Sound {
+        case guitar, click, accentClick
     }
 
     // MARK: - Engine
@@ -197,11 +203,40 @@ final class AudioPlayer {
         guard isReady, !notes.isEmpty, startEngineIfNeeded() else { return }
         voiceLock.lock()
         defer { voiceLock.unlock() }
+        schedule(notes, from: renderedFrames)
+    }
+
+    /// Where the timeline is now, in frames, and its rate: for playing a long piece in pieces
+    /// (`play(_:fromFrame:)`) that all keep one clock, like Solo Buddy's backing. Starts the
+    /// engine if it can; nil if it can't run right now (a call).
+    func timeline() -> (frame: Int64, sampleRate: Double)? {
+        guard isReady, startEngineIfNeeded() else { return nil }
+        voiceLock.lock()
+        defer { voiceLock.unlock() }
+        return (renderedFrames, sampleRate)
+    }
+
+    /// Play notes with each `delay` measured from timeline frame `anchor` (see `timeline()`)
+    /// instead of from now. Notes whose time has already passed start right away.
+    func play(_ notes: [ScheduledNote], fromFrame anchor: Int64) {
+        guard isReady, !notes.isEmpty, startEngineIfNeeded() else { return }
+        voiceLock.lock()
+        defer { voiceLock.unlock() }
+        schedule(notes, from: anchor)
+    }
+
+    /// Adds voices for `notes` timed from `anchor`. Call with the lock held.
+    private func schedule(_ notes: [ScheduledNote], from anchor: Int64) {
         let now = renderedFrames
         let releaseFrames = Int(releaseTime * sampleRate)
         let sampleBank = GuitarSampleBank.shared
         for note in notes {
-            let start = now + Int64((max(note.delay, 0) * sampleRate).rounded())
+            let start = max(now, anchor + Int64((max(note.delay, 0) * sampleRate).rounded()))
+            if note.sound != .guitar {
+                voices.append(ClickVoice(accent: note.sound == .accentClick, sampleRate: sampleRate,
+                                         startFrame: start, releaseFrames: releaseFrames, gain: 0.6 * note.gain))
+                continue
+            }
             let ring = Int64(((note.duration ?? defaultDuration) * sampleRate).rounded())
             if let sampleBank {
                 voices.append(SampledNote(midi: note.midi, recording: sampleBank.recording(for: note.midi),
