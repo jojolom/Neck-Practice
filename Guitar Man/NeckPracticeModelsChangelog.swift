@@ -38,12 +38,14 @@ enum Changelog {
         ChangelogEntry(
             version: "1.5",
             released: "October 2026",
-            releasedOn: DateComponents(year: 2026, month: 10, day: 20),
+            releasedOn: DateComponents(year: 2026, month: 10, day: 30),
             items: [
                 ChangelogItem(symbol: "guitars.fill", title: "Solo Buddy",
                               detail: "A backing track to practise your soloing over. Pick a key and up to four chords, or the 12-bar blues, choose a style from fingerpicked to funk, and solo along with the pentatonic box it shows, in any of its five positions."),
                 ChangelogItem(symbol: "music.note.list", title: "21 grooves to jam over",
                               detail: "Presets from Spanish Nights and Rock Anthem to Slow Blues, Island Reggae and a bossa ii–V–I, each playable in any key. Tap Grooves to pick one, start your own from scratch chord by chord, and save the grooves you make."),
+                ChangelogItem(symbol: "questionmark.circle", title: "Theory Basics",
+                              detail: "A quiz on the circle of fifths, key signatures, relative and parallel keys, and scales. Fill in the missing slice of the circle, name a key's sharps, spell a scale. Pick the topics you want in its Settings."),
                 ChangelogItem(symbol: "speaker.wave.2", title: "Hear your compositions",
                               detail: "Turn on Hear Compositions in Compose Settings (the ⋯ menu) and a speaker button plays your piece on the guitar, chords and melody, before you play along."),
                 ChangelogItem(symbol: "sparkles.rectangle.stack", title: "A tour of Compose",
@@ -52,6 +54,10 @@ enum Changelog {
                               detail: "In Compose, tap chords and they fill the staff one after another at the blue mark. Tap an empty beat to pick its chord right there, and the chord row stays under your thumb."),
                 ChangelogItem(symbol: "music.quarternote.3", title: "A tidier Compose",
                               detail: "Chord names and numerals line up like a lead sheet, the measure playing lights up as you hear it, and your compositions show when you last changed them. Swipe one to rename it."),
+                ChangelogItem(symbol: "checkmark.seal", title: "Keys named right in Scale Study",
+                              detail: "Each key is now spelled from the one before it: the relative minor of F♯ major is D♯ minor, not E♭ minor."),
+                ChangelogItem(symbol: "arrow.up.arrow.down", title: "Intervals both ways",
+                              detail: "The Interval Trainer now mixes up whether the higher or the lower note comes first on every question."),
             ]
         ),
         ChangelogEntry(
