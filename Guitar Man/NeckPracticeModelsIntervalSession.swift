@@ -70,8 +70,6 @@ final class IntervalSession {
 
     /// Most sharps or flats in the key signature (0 = C major only, up to 6).
     var maxAccidentals: Int = 4
-    /// Sometimes write the higher note first.
-    var includeDescending: Bool = true
     /// Add 9ths through 13ths to the pool.
     var includeCompound: Bool = false
     /// Follow some questions with an inversion / compound question.
@@ -199,7 +197,8 @@ final class IntervalSession {
         // Single sharps and flats only: no double accidentals in the answer.
         guard let upper = lower.transposed(by: interval), abs(upper.accidental) <= 1 else { return nil }
 
-        let descending = includeDescending && Bool.random()
+        // Higher or lower note first, at random.
+        let descending = Bool.random()
         let count = max(3, min(6, choiceCount))
         let choices = ([interval] + interval.distractors(count - 1)).shuffled()
         return IntervalQuestion(keySignature: key, lower: lower, upper: upper, interval: interval,

@@ -164,10 +164,9 @@ struct SightReadingStepConfig: Codable, Hashable {
 
 struct IntervalStepConfig: Codable, Hashable {
     var maxAccidentals: Int? = nil
-    var includeDescending: Bool? = nil
     var includeCompound: Bool? = nil
 
-    var hasOverrides: Bool { maxAccidentals != nil || includeDescending != nil || includeCompound != nil }
+    var hasOverrides: Bool { maxAccidentals != nil || includeCompound != nil }
 }
 
 struct ModeStepConfig: Codable, Hashable {
@@ -261,7 +260,6 @@ extension IntervalSession {
     func apply(override: IntervalStepConfig?) {
         guard let override else { return }
         if let v = override.maxAccidentals { maxAccidentals = v }
-        if let v = override.includeDescending { includeDescending = v }
         if let v = override.includeCompound { includeCompound = v }
     }
 }
