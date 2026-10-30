@@ -267,11 +267,6 @@ struct PracticeStepCustomizeView: View {
                 Stepper(binding.wrappedValue == 0 ? "C major only" : "Up to \(binding.wrappedValue) ♯/♭",
                         value: binding, in: 0...6)
             }
-            overrideRow(label: "Higher Note First",
-                        value: $draft.config.intervals.includeDescending,
-                        defaultValue: true) { binding in
-                Toggle("Higher Note First", isOn: binding).labelsHidden()
-            }
             overrideRow(label: "Compound Intervals",
                         value: $draft.config.intervals.includeCompound,
                         defaultValue: false) { binding in

@@ -4,7 +4,7 @@
 //  Offline check for the notation model and the Interval Trainer: key signature names, interval
 //  arithmetic (semitones, spelling, inversions, compounds), wrong-answer choices, thousands of
 //  generated questions (right interval, single accidentals, on the staff and the first 12 frets,
-//  fretboard placement), triads spelled as chords, and the modes (spelling, formulas, fingerings, quiz).
+//  higher or lower note first at random, fretboard placement), triads spelled as chords, and the modes (spelling, formulas, fingerings, quiz).
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/interval-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsIntervalSession.swift" "Guitar Man/NeckPracticeModelsTriad.swift" "Guitar Man/NeckPracticeModelsMode.swift" scripts/interval-check.swift && /tmp/interval-check
@@ -124,12 +124,16 @@ struct IntervalCheck {
                 session.choiceCount = 4
                 session.start()
                 var seen = Set<String>()
+                var descending = 0
                 for _ in 0..<3000 {
                     guard let q = session.currentQuestion, let anchor = session.anchorPosition else {
                         check(false, "no question (\(maxAccidentals), \(compound))")
                         break
                     }
                     seen.insert(q.interval.shortName)
+                    if q.descending { descending += 1 }
+                    check(q.first.midi == (q.descending ? q.upper.midi : q.lower.midi) && q.first.midi != q.second.midi
+                          && (q.first.midi > q.second.midi) == q.descending, "descending writes the higher note first")
                     check(Interval.between(q.lower, q.upper) == q.interval, "question interval")
                     check(abs(q.lower.accidental) <= 1 && abs(q.upper.accidental) <= 1, "single accidentals")
                     check(q.lower.staffPosition >= -4 && q.upper.staffPosition <= 11, "on the staff")
@@ -151,6 +155,8 @@ struct IntervalCheck {
                     }
                     session.advance()
                 }
+                // Higher note first about half the time (3000 coin flips: 1350–1650 is over 5 standard deviations).
+                check((1350...1650).contains(descending), "higher note first at random: \(descending) of 3000")
                 let pool = compound ? Interval.simplePool + Interval.compoundPool : Interval.simplePool
                 check(seen == Set(pool.map(\.shortName)),
                       "every interval comes up (\(maxAccidentals), \(compound)): missing \(Set(pool.map(\.shortName)).subtracting(seen))")

@@ -357,7 +357,6 @@ struct IntervalSettingsView: View {
                 }
 
                 Section {
-                    Toggle("Higher Note First Sometimes", isOn: $session.includeDescending)
                     Toggle("Compound Intervals (9ths–13ths)", isOn: $session.includeCompound)
                 } header: {
                     Text("Intervals")
