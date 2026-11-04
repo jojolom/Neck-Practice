@@ -54,6 +54,8 @@ enum Changelog {
                               detail: "In Compose, tap chords and they fill the staff one after another at the blue mark. Tap an empty beat to pick its chord right there, and the chord row stays under your thumb."),
                 ChangelogItem(symbol: "music.quarternote.3", title: "A tidier Compose",
                               detail: "Chord names and numerals line up like a lead sheet, the measure playing lights up as you hear it, and your compositions show when you last changed them. Swipe one to rename it."),
+                ChangelogItem(symbol: "square.grid.2x2", title: "A tidier home screen",
+                              detail: "Exercises are grouped into Fretboard, Theory and Play. Fold away any section you don't use, and it stays folded."),
                 ChangelogItem(symbol: "checkmark.seal", title: "Keys named right in Scale Study",
                               detail: "Each key is now spelled from the one before it: the relative minor of F♯ major is D♯ minor, not E♭ minor."),
                 ChangelogItem(symbol: "arrow.up.arrow.down", title: "Intervals both ways",

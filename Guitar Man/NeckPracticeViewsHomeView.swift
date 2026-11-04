@@ -13,6 +13,40 @@ struct ExerciseItem {
     let icon: String      // SF Symbol name
     let color: Color
     let isAvailable: Bool
+    let group: ExerciseGroup
+}
+
+/// The home screen's sections of exercise cards, in order.
+enum ExerciseGroup: String, CaseIterable, Identifiable {
+    case fretboard, theory, play
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fretboard: return "Fretboard"
+        case .theory:    return "Theory"
+        case .play:      return "Play"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .fretboard: return "Find it on the neck"
+        case .theory:    return "Quizzes, no guitar needed"
+        case .play:      return "Guitar in hand, with sound"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .fretboard: return "hand.point.up.left.fill"
+        case .theory:    return "graduationcap.fill"
+        case .play:      return "play.circle.fill"
+        }
+    }
+
+    var items: [ExerciseItem] { ExerciseItem.all.filter { $0.group == self } }
 }
 
 extension ExerciseItem {
@@ -22,77 +56,88 @@ extension ExerciseItem {
             subtitle: "Identify any note on the fretboard",
             icon: "scope",
             color: .blue,
-            isAvailable: true
+            isAvailable: true,
+            group: .fretboard
         ),
         ExerciseItem(
             title: "Triad Trainer",
             subtitle: "Name major & minor triad shapes",
             icon: "music.note.list",
             color: .purple,
-            isAvailable: true
+            isAvailable: true,
+            group: .fretboard
         ),
         ExerciseItem(
             title: "Pentatonic Trainer",
             subtitle: "Memorize the 5 pentatonic box positions",
             icon: "square.grid.3x3.fill",
             color: .orange,
-            isAvailable: true
+            isAvailable: true,
+            group: .fretboard
         ),
         ExerciseItem(
             title: "Sight Reading",
             subtitle: "Find staff notes on the fretboard",
             icon: "music.note",
             color: .teal,
-            isAvailable: true
-        ),
-        ExerciseItem(
-            title: "Scale Study",
-            subtitle: "Practice scales with metronome & theory",
-            icon: "music.quarternote.3",
-            color: .mint,
-            isAvailable: true
-        ),
-        ExerciseItem(
-            title: "Roman Numerals",
-            subtitle: "Practice diatonic scale degree numerals",
-            icon: "number.circle.fill",
-            color: .pink,
-            isAvailable: true
+            isAvailable: true,
+            group: .fretboard
         ),
         ExerciseItem(
             title: "Interval Trainer",
             subtitle: "Name intervals on the staff, then find them on the neck",
             icon: "arrow.up.and.down",
             color: .cyan,
-            isAvailable: true
-        ),
-        ExerciseItem(
-            title: "Mode Quiz",
-            subtitle: "Name the modes and hear how they differ",
-            icon: "circle.hexagongrid.fill",
-            color: .indigo,
-            isAvailable: true
+            isAvailable: true,
+            group: .fretboard
         ),
         ExerciseItem(
             title: "Theory Basics",
             subtitle: "Quiz yourself on keys, scales & the circle of fifths",
             icon: "questionmark.circle.fill",
             color: .green,
-            isAvailable: true
+            isAvailable: true,
+            group: .theory
         ),
         ExerciseItem(
-            title: "Compose",
-            subtitle: "Build chord progressions with Roman numerals, then play them",
-            icon: "music.note.house.fill",
-            color: .brown,
-            isAvailable: true
+            title: "Roman Numerals",
+            subtitle: "Practice diatonic scale degree numerals",
+            icon: "number.circle.fill",
+            color: .pink,
+            isAvailable: true,
+            group: .theory
+        ),
+        ExerciseItem(
+            title: "Mode Quiz",
+            subtitle: "Name the modes and hear how they differ",
+            icon: "circle.hexagongrid.fill",
+            color: .indigo,
+            isAvailable: true,
+            group: .theory
+        ),
+        ExerciseItem(
+            title: "Scale Study",
+            subtitle: "Practice scales with metronome & theory",
+            icon: "music.quarternote.3",
+            color: .mint,
+            isAvailable: true,
+            group: .play
         ),
         ExerciseItem(
             title: "Solo Buddy",
             subtitle: "Jam over a backing track with the pentatonic scale",
             icon: "guitars.fill",
             color: .red,
-            isAvailable: true
+            isAvailable: true,
+            group: .play
+        ),
+        ExerciseItem(
+            title: "Compose",
+            subtitle: "Build chord progressions with Roman numerals, then play them",
+            icon: "music.note.house.fill",
+            color: .brown,
+            isAvailable: true,
+            group: .play
         ),
     ]
 }
@@ -145,8 +190,12 @@ struct HomeView: View {
     @State private var path = NavigationPath()
     @State private var whatsNew: ChangelogEntry?
     @State private var showAbout = false
-    @State private var showTools = true
-    @State private var showReferences = true
+    // Which sections are open, remembered between launches.
+    @AppStorage("home.show.fretboard") private var showFretboard = true
+    @AppStorage("home.show.theory") private var showTheory = true
+    @AppStorage("home.show.play") private var showPlay = true
+    @AppStorage("home.show.tools") private var showTools = true
+    @AppStorage("home.show.references") private var showReferences = true
 
     private let columns = [GridItem(.flexible(), spacing: 16),
                             GridItem(.flexible(), spacing: 16)]
@@ -162,20 +211,34 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
 
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(ExerciseItem.all, id: \.title) { item in
-                        if item.isAvailable {
-                            NavigationLink(value: HomeRoute.exercise(item.title)) {
-                                ExerciseCard(item: item)
+                // MARK: - Exercise Sections
+
+                ForEach(ExerciseGroup.allCases) { group in
+                    let isExpanded = expandedBinding(for: group)
+                    VStack(spacing: 12) {
+                        sectionHeader(title: group.title, subtitle: group.subtitle,
+                                      icon: group.icon, isExpanded: isExpanded)
+
+                        if isExpanded.wrappedValue {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(group.items, id: \.title) { item in
+                                    if item.isAvailable {
+                                        NavigationLink(value: HomeRoute.exercise(item.title)) {
+                                            ExerciseCard(item: item)
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        ExerciseCard(item: item)
+                                            .opacity(0.45)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
-                        } else {
-                            ExerciseCard(item: item)
-                                .opacity(0.45)
+                            .transition(toolTransition)
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
                 }
-                .padding(20)
 
                 // MARK: - Tools Section
 
@@ -211,6 +274,7 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 20)
                 .id("toolsSection")
 
                 // MARK: - References Section
@@ -325,8 +389,17 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
+    private func expandedBinding(for group: ExerciseGroup) -> Binding<Bool> {
+        switch group {
+        case .fretboard: return $showFretboard
+        case .theory:    return $showTheory
+        case .play:      return $showPlay
+        }
+    }
+
     private func sectionHeader(
         title: String,
+        subtitle: String? = nil,
         icon: String,
         isExpanded: Binding<Bool>,
         onExpand: @escaping () -> Void = {}
@@ -341,9 +414,16 @@ struct HomeView: View {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text(title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
