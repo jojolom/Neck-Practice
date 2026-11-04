@@ -11,9 +11,9 @@ import SwiftUI
 
 struct ModeReferenceView: View {
 
-    @State private var mode: Mode = .dorian
-    @State private var root: Note = .d
-    @State private var showDegrees = true
+    @SavedSetting("reference.mode.mode") private var mode: Mode = .dorian
+    @SavedSetting("reference.mode.root") private var root: Note = .d
+    @SavedSetting("reference.mode.showDegrees") private var showDegrees = true
     @State private var showIntro = false
     @State private var playingIndex: Int? = nil
     @State private var isPlaying = false

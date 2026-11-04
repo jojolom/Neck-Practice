@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - ScaleType
 
-private enum ScaleType: String, CaseIterable, Identifiable {
+private enum ScaleType: String, CaseIterable, Identifiable, Codable {
     case major = "Major"
     case minor = "Minor"
 
@@ -39,7 +39,7 @@ private enum ScaleType: String, CaseIterable, Identifiable {
 
 /// CAGED-style shape variants: the scale played from the root sitting on
 /// either the 6th string (E-shape) or 5th string (A-shape).
-private enum ShapeAnchor: String, CaseIterable, Identifiable {
+private enum ShapeAnchor: String, CaseIterable, Identifiable, Codable {
     case sixthString = "6th String Root"
     case fifthString = "5th String Root"
 
@@ -141,9 +141,9 @@ private let fifthStringMinorShape = ScaleShape(offsetsByString: [
 
 struct ScaleReferenceView: View {
 
-    @State private var rootNote: Note = .c
-    @State private var scaleType: ScaleType = .major
-    @State private var shapeAnchor: ShapeAnchor = .sixthString
+    @SavedSetting("reference.scale.root") private var rootNote: Note = .c
+    @SavedSetting("reference.scale.type") private var scaleType: ScaleType = .major
+    @SavedSetting("reference.scale.anchor") private var shapeAnchor: ShapeAnchor = .sixthString
     @State private var playingPosition: FretboardPosition? = nil
     @State private var isPlaying = false
     @Environment(AudioSettings.self) private var audioSettings

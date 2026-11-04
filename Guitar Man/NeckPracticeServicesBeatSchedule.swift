@@ -23,7 +23,7 @@ struct BeatSchedule {
     let sampleRate: Double
     let beatsPerMeasure: Int
     /// Clicks per beat: 1 for beats only, 2 for eighths, 3 for triplets, 4 for sixteenths.
-    let subdivisions: Int
+    private(set) var subdivisions: Int
     /// Where the next click goes (not handed out yet).
     private(set) var nextPosition: Double
     private var nextIndex = 0
@@ -66,5 +66,27 @@ struct BeatSchedule {
         let newSpacing = Self.spacing(bpm: bpm, sampleRate: sampleRate) / Double(subdivisions)
         nextPosition = max(nextPosition - spacing + newSpacing, Double(earliest))
         spacing = newSpacing
+    }
+
+    /// Changes clicks per beat from the next click on, keeping the beats where they are: the next
+    /// click is the first of the new grid at or after `earliest` and the last one handed out.
+    mutating func setSubdivisions(_ subdivisions: Int, earliest: Int64) {
+        let new = max(1, subdivisions)
+        guard new != self.subdivisions else { return }
+        let beatSpacing = spacing * Double(self.subdivisions)
+        var beatStart = nextPosition - Double(nextSubdivision) * spacing
+        let newSpacing = beatSpacing / Double(new)
+        let target = max(nextPosition, Double(earliest))
+        // (The small nudge: a target already on the new grid mustn't round up past its click.)
+        var slot = max(Int(((target - beatStart) / newSpacing - 1e-6).rounded(.up)), 0)
+        while slot >= new {
+            slot -= new
+            beatStart += beatSpacing
+            nextIndex = (nextIndex + 1) % beatsPerMeasure
+        }
+        nextPosition = beatStart + Double(slot) * newSpacing
+        nextSubdivision = slot
+        spacing = newSpacing
+        self.subdivisions = new
     }
 }

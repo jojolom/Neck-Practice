@@ -76,6 +76,11 @@ final class QuizSession {
         drawNextPosition()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        currentPosition.map(pool.contains) ?? true
+    }
+
     var accuracy: Double {
         guard totalAnswered > 0 else { return 0 }
         return Double(score) / Double(totalAnswered)

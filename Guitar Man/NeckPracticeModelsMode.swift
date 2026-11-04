@@ -264,6 +264,18 @@ final class ModeQuizSession {
         drawNext()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let q = currentQuestion else { return true }
+        return kinds.contains(q.kind)
+    }
+
+    /// The number of choices changed: same scale and kind, new choices (not yet answered).
+    func refreshChoices() {
+        guard let q = currentQuestion else { return }
+        currentQuestion = Self.makeQuestion(kind: q.kind, scale: q.scale, choiceCount: max(3, min(7, choiceCount)))
+    }
+
     @discardableResult
     func answer(_ choice: String) -> Bool {
         guard let q = currentQuestion else { return false }

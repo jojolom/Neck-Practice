@@ -37,9 +37,48 @@ struct MetronomeCheck {
         checkNoDrift()
         checkTempoChange()
         checkSubdivisions()
+        checkSubdivisionChange()
         checkRenderedClicks()
         print(failures == 0 ? "0 failures" : "\(failures) failures")
         exit(failures == 0 ? 0 : 1)
+    }
+
+    /// Changing clicks per beat while playing keeps every beat where it was, with no click in
+    /// the past, no doubled click and no gap, wherever in the beat the change lands.
+    static func checkSubdivisionChange() {
+        let spacing = BeatSchedule.spacing(bpm: 97, sampleRate: rate)
+        let beatTime: (Int) -> Int64 = { Int64((0.05 * rate + Double($0) * spacing).rounded()) }
+        var allGood = true
+        for from in 1...4 {
+            for to in 1...4 where to != from {
+                for changeAt in stride(from: 3.0, to: 3.0 + 60 / 97.0, by: 0.037) {
+                    var schedule = BeatSchedule(bpm: 97, beatsPerMeasure: 4, subdivisions: from, sampleRate: rate,
+                                                firstBeatAt: 0.05 * rate)
+                    let horizon = Int64(changeAt * rate)
+                    let before = schedule.beats(through: horizon)
+                    let earliest = horizon + 200
+                    schedule.setSubdivisions(to, earliest: earliest)
+                    let after = schedule.beats(through: Int64(12 * rate))
+
+                    let ordered = zip(after, after.dropFirst()).allSatisfy { $0.sampleTime < $1.sampleTime }
+                    let notPast = after.first.map { $0.sampleTime >= earliest && $0.sampleTime > (before.last?.sampleTime ?? 0) } ?? false
+                    // Each beat after the change: on its own sample, the right accent, `to` clicks evenly.
+                    let onBeats = after.filter { $0.subdivision == 0 }
+                    let beatsRight = onBeats.allSatisfy { beat in
+                        (0..<300).contains { number in beatTime(number) == beat.sampleTime && number % 4 == beat.index }
+                    }
+                    let fullBeat = 60 / 97.0 * rate
+                    let gapsRight = zip(after, after.dropFirst()).allSatisfy { a, b in
+                        abs(Double(b.sampleTime - a.sampleTime) - fullBeat / Double(to)) <= 1
+                    }
+                    if !(ordered && notPast && beatsRight && gapsRight && !onBeats.isEmpty) {
+                        allGood = false
+                        print("FAIL", "\(from) → \(to) at \(changeAt) s: ordered \(ordered), not past \(notPast), beats \(beatsRight), gaps \(gapsRight)")
+                    }
+                }
+            }
+        }
+        check(allGood, "changing clicks per beat while playing keeps the beats, wherever it lands")
     }
 
     /// Every beat over 10 minutes is at the exact rounded position, and the accent cycles.

@@ -81,6 +81,12 @@ final class RomanNumeralSession {
         drawNext()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let q = currentQuestion else { return true }
+        return (keyFilter == nil || q.key == keyFilter) && (scaleFilter == nil || q.scale == scaleFilter)
+    }
+
     // MARK: - Private
 
     private func drawNext() {

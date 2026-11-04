@@ -42,10 +42,14 @@ struct PentatonicView: View {
     // never disappears between advance() and the next draw.
     @State private var displayedQuestion: PentatonicQuestion? = nil
 
-    init(override: PentatonicStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((PentatonicStepConfig) -> Void)?
+
+    init(override: PentatonicStepConfig? = nil, onStepChange: ((PentatonicStepConfig) -> Void)? = nil) {
         let session = PentatonicSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("pentatonic"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
 
     var body: some View {
@@ -134,6 +138,10 @@ struct PentatonicView: View {
             }
             .sheet(isPresented: $showSettings) {
                 PentatonicSettingsView(session: session)
+            }
+            .savesSettings(session.settings, game: "pentatonic", step: onStepChange) { settingsChanged() }
+            .onChange(of: session.rootChoiceCount) {
+                if case .root = step, !isLocked { refreshRootChoices() }
             }
             .onAppear {
                 session.start()
@@ -324,6 +332,21 @@ struct PentatonicView: View {
         let count = min(session.rootChoiceCount, Note.allCases.count)
         let distractors = Array(correct.circleOfFifthsDistractors().prefix(count - 1))
         rootChoices = ([correct] + distractors).sorted { $0.rawValue < $1.rawValue }
+    }
+
+    /// A new shape only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        guard !session.currentFitsSettings else { return }
+        nextGate.cancel()
+        answerResult      = nil
+        selectedDots      = []
+        correctRoot       = nil
+        wrongRoot         = nil
+        showRootDots      = false
+        step              = .selectRoots
+        isLocked          = false
+        session.advance()
+        displayedQuestion = session.currentQuestion
     }
 
     private func resetSession() {

@@ -34,8 +34,14 @@ final class Metronome {
     var beatsPerMeasure: Int = 4
 
     /// Clicks per beat: 1 for beats only; 2, 3 or 4 adds a quiet click on each eighth, triplet
-    /// or sixteenth. Takes effect the next time the metronome starts.
-    var subdivisions: Int = 1
+    /// or sixteenth. A change while playing comes in on the next unqueued click, on the same beat.
+    var subdivisions: Int = 1 {
+        didSet {
+            guard subdivisions != oldValue, isPlaying else { return }
+            let now = playerSampleTime() ?? 0
+            schedule?.setSubdivisions(subdivisions, earliest: now + Int64(lead * sampleRate))
+        }
+    }
 
     // MARK: - State
 

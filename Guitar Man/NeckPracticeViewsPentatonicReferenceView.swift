@@ -10,9 +10,9 @@ import SwiftUI
 
 struct PentatonicReferenceView: View {
 
-    @State private var rootNote: Note = .a
-    @State private var quality: PentatonicQuality = .minor
-    @State private var shapeIndex: Int = 0
+    @SavedSetting("reference.pentatonic.root") private var rootNote: Note = .a
+    @SavedSetting("reference.pentatonic.quality") private var quality: PentatonicQuality = .minor
+    @SavedSetting("reference.pentatonic.shape") private var shapeIndex: Int = 0
     @State private var playingPosition: FretboardPosition? = nil
     @State private var isPlaying = false
     @Environment(AudioSettings.self) private var audioSettings

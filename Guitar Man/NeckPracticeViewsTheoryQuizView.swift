@@ -59,9 +59,10 @@ struct TheoryQuizView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showSettings, onDismiss: skipHiddenTopic) {
+            .sheet(isPresented: $showSettings) {
                 TheoryQuizSettingsView(session: session)
             }
+            .onChange(of: session.topics) { skipHiddenTopic() }
             // Drawing a question bumps questionNumber, which resets the screen.
             .onAppear { session.start() }
             .onChange(of: session.questionNumber) {

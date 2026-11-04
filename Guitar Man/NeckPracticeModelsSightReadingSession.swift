@@ -99,6 +99,18 @@ final class SightReadingSession {
         drawNext()
     }
 
+    /// The note on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let pitch = currentPitch else { return true }
+        return pool.contains { $0.midiNote == pitch.midi }
+    }
+
+    /// The fret range changed but the note still fits: which spots count may have.
+    func refreshValidPositions() {
+        guard let pitch = currentPitch else { return }
+        validPositions = Set(pool.filter { $0.midiNote == pitch.midi })
+    }
+
     // MARK: - Private
 
     private func drawNext() {

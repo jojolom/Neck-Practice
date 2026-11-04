@@ -19,6 +19,8 @@ struct PracticeSessionResult {
 struct PracticeSessionView: View {
 
     let plan: PracticePlan
+    /// A setting changed during a step: save it to that step in the plan.
+    let onStepChange: (UUID, StepConfig) -> Void
     /// Called when the user finishes or exits. Callee is responsible for
     /// logging + dismissal.
     let onFinish: (PracticeSessionResult) -> Void
@@ -194,15 +196,22 @@ struct PracticeSessionView: View {
     private func stepContent(for kind: PracticeStepKind) -> some View {
         let config = currentStep?.config
         switch kind {
-        case .noteGuesser:  QuizView(override: config?.quiz)
-        case .pentatonic:   PentatonicView(override: config?.pentatonic)
-        case .triad:        TriadView(override: config?.triad)
-        case .romanNumeral: RomanNumeralView(override: config?.romanNumeral)
-        case .scaleStudy:   ScaleStudyView(override: config?.scaleStudy)
-        case .sightReading: SightReadingView(override: config?.sightReading)
-        case .intervals:    IntervalView(override: config?.intervals)
-        case .modes:        ModeQuizView(override: config?.modes)
+        case .noteGuesser:  QuizView(override: config?.quiz) { saveStep(\.quiz, $0) }
+        case .pentatonic:   PentatonicView(override: config?.pentatonic) { saveStep(\.pentatonic, $0) }
+        case .triad:        TriadView(override: config?.triad) { saveStep(\.triad, $0) }
+        case .romanNumeral: RomanNumeralView(override: config?.romanNumeral) { saveStep(\.romanNumeral, $0) }
+        case .scaleStudy:   ScaleStudyView(override: config?.scaleStudy) { saveStep(\.scaleStudy, $0) }
+        case .sightReading: SightReadingView(override: config?.sightReading) { saveStep(\.sightReading, $0) }
+        case .intervals:    IntervalView(override: config?.intervals) { saveStep(\.intervals, $0) }
+        case .modes:        ModeQuizView(override: config?.modes) { saveStep(\.modes, $0) }
         }
+    }
+
+    private func saveStep<Settings>(_ field: WritableKeyPath<StepConfig, Settings>, _ settings: Settings) {
+        guard let step = currentStep else { return }
+        var config = step.config
+        config[keyPath: field] = settings
+        onStepChange(step.id, config)
     }
 
     private var finishedView: some View {
@@ -322,5 +331,5 @@ struct PracticeSessionView: View {
 }
 
 #Preview {
-    PracticeSessionView(plan: PracticePlan.defaults[0]) { _ in }
+    PracticeSessionView(plan: PracticePlan.defaults[0], onStepChange: { _, _ in }) { _ in }
 }

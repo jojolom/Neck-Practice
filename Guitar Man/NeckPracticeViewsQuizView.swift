@@ -9,10 +9,14 @@ struct QuizView: View {
 
     @State private var session: QuizSession
 
-    init(override: QuizStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((QuizStepConfig) -> Void)?
+
+    init(override: QuizStepConfig? = nil, onStepChange: ((QuizStepConfig) -> Void)? = nil) {
         let session = QuizSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("noteGuesser"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
     @State private var showingSettings = false
     @State private var answerFlash: Color = .clear
@@ -134,6 +138,9 @@ struct QuizView: View {
             .sheet(isPresented: $showingSettings) {
                 QuizSettingsView(session: session)
             }
+            .savesSettings(session.settings, game: "noteGuesser", step: onStepChange) { settingsChanged() }
+            .onChange(of: session.choiceCount) { if !isLocked { refreshChoices() } }
+            .onChange(of: session.naturalsOnly) { if !isLocked { refreshChoices() } }
             .onAppear {
                 session.start()
                 refreshChoices()
@@ -151,6 +158,16 @@ struct QuizView: View {
     }
 
     // MARK: - Helpers
+
+    /// A new note only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        if session.naturalsOnly, session.choiceCount > 7 { session.choiceCount = 7 }
+        guard !session.currentFitsSettings else { return }
+        nextGate.cancel()
+        answerFlash = .clear
+        isLocked = false
+        session.advance()
+    }
 
     private func refreshChoices() {
         guard let correct = session.currentPosition?.note else {

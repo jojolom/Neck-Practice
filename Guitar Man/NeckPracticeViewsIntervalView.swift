@@ -21,10 +21,14 @@ struct IntervalView: View {
 
     @State private var session: IntervalSession
 
-    init(override: IntervalStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((IntervalStepConfig) -> Void)?
+
+    init(override: IntervalStepConfig? = nil, onStepChange: ((IntervalStepConfig) -> Void)? = nil) {
         let session = IntervalSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("intervals"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
 
     @State private var step: IntervalStep = .identify
@@ -90,6 +94,10 @@ struct IntervalView: View {
             }
             .sheet(isPresented: $showSettings) {
                 IntervalSettingsView(session: session)
+            }
+            .savesSettings(session.settings, game: "intervals", step: onStepChange) { settingsChanged() }
+            .onChange(of: session.choiceCount) {
+                if step == .identify, pickedChoice == nil { session.refreshChoices() }
             }
             // Drawing a question bumps questionNumber, which resets the screen and plays it.
             .onAppear { session.start() }
@@ -293,6 +301,15 @@ struct IntervalView: View {
     }
 
     /// Resets the screen for the question the session just drew, and plays it.
+    /// A new question only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        if !session.currentFitsSettings || (step == .bonus && !session.bonusQuestions) {
+            session.advance()   // questionNumber changes, which resets the screen
+        } else {
+            session.dropBonusIfOff()
+        }
+    }
+
     private func newQuestion() {
         nextGate.cancel()
         step = .identify

@@ -8,6 +8,7 @@ import SwiftUI
 struct MetronomeView: View {
 
     @State private var metronome = Metronome()
+    @AppStorage("metronome.bpm") private var savedBPM: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -121,6 +122,10 @@ struct MetronomeView: View {
             .padding(.bottom, 40)
         }
         .navigationTitle("Metronome")
+        .onAppear {
+            if let savedBPM { metronome.bpm = savedBPM }
+        }
+        .onChange(of: metronome.bpm) { savedBPM = metronome.bpm }
         .onDisappear {
             metronome.stop()
         }

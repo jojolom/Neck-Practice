@@ -4,9 +4,10 @@
 //
 //  Plays Solo Buddy's groove on a loop, on AudioPlayer's sample-accurate timeline. A timer
 //  hands each bar to AudioPlayer a moment before it's due (see BarClock), so every bar starts
-//  exactly where the last ended, and a change to the groove (chords, style, tempo, key) comes
-//  in at the next bar. An optional one-bar count-in and a click on every beat use the
-//  metronome's click (ClickVoice). Stops for calls and when the app goes to the background.
+//  exactly where the last ended. A change you'd hear (chords, style, tempo, key, click) comes in
+//  at once, by playing the bar you're in again from its first beat. An optional one-bar count-in
+//  and a click on every beat use the metronome's click (ClickVoice). Stops for calls and when
+//  the app goes to the background.
 //
 
 import AVFoundation
@@ -16,12 +17,16 @@ import UIKit
 @Observable
 final class BackingTrack {
 
-    /// What it plays; changes take effect from the next bar.
-    var groove = SoloGroove()
+    /// What it plays; a change you'd hear restarts the bar you're in.
+    var groove = SoloGroove() {
+        didSet { grooveChanged(from: oldValue) }
+    }
     /// One bar of clicks before the backing starts.
     var countsIn = true
     /// A click on every beat while it plays.
-    var clicks = false
+    var clicks = false {
+        didSet { if clicks != oldValue { restartBar() } }
+    }
 
     private(set) var isPlaying = false
     /// The bar you're hearing (0 = the first after the count-in), or nil (stopped, counting in).
@@ -32,6 +37,8 @@ final class BackingTrack {
 
     /// How far ahead of its start a bar is handed to AudioPlayer.
     private let lookahead: TimeInterval = 0.3
+    /// How soon after a change its bar starts (just enough for the old notes to fade).
+    private let restartLead: TimeInterval = 0.03
     private var clock: BarClock?
     private var scheduled: [BarClock.Bar] = []
     private var countInStart: Int64 = 0
@@ -47,24 +54,8 @@ final class BackingTrack {
         guard !isPlaying, let timeline = AudioPlayer.shared.timeline() else { return }
         AudioPlayer.shared.stopAll()
         sampleRate = timeline.sampleRate
-        var first = timeline.frame + Int64(0.15 * sampleRate)
-        countInStart = first
-        countInFrames = 0
-        if countsIn {
-            countInFrames = framesPerBar
-            let beatSeconds = groove.secondsPerBeat
-            AudioPlayer.shared.play((0..<groove.beatsPerBar).map { beat in
-                AudioPlayer.ScheduledNote(midi: 0, delay: Double(beat) * beatSeconds, gain: 1,
-                                          sound: beat == 0 ? .accentClick : .click)
-            }, fromFrame: first)
-            first += countInFrames
-        }
-        clock = BarClock(firstBarFrame: first)
-        scheduled = []
+        begin(at: timeline.frame + Int64(0.15 * sampleRate))
         isPlaying = true
-        isCountingIn = countsIn
-        bar = nil
-        beat = 0
         observe()
         tick()
         let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in self?.tick() }
@@ -85,6 +76,55 @@ final class BackingTrack {
         beat = 0
         clock = nil
         scheduled = []
+    }
+
+    /// Sets up the count-in, if there is one, and the first bar.
+    private func begin(at frame: Int64) {
+        var first = frame
+        countInStart = first
+        countInFrames = 0
+        if countsIn {
+            countInFrames = framesPerBar
+            let beatSeconds = groove.secondsPerBeat
+            AudioPlayer.shared.play((0..<groove.beatsPerBar).map { beat in
+                AudioPlayer.ScheduledNote(midi: 0, delay: Double(beat) * beatSeconds, gain: 1,
+                                          sound: beat == 0 ? .accentClick : .click)
+            }, fromFrame: first)
+            first += countInFrames
+        }
+        clock = BarClock(firstBarFrame: first)
+        scheduled = []
+        isCountingIn = countsIn
+        bar = nil
+        beat = 0
+    }
+
+    // MARK: - Changes while playing
+
+    /// Restarts the bar if the change reaches what you're hearing or what's already on its way
+    /// (changing a chord further along is heard when it comes round).
+    private func grooveChanged(from old: SoloGroove) {
+        guard isPlaying else { return }
+        let sounding = bar.map { [$0] } ?? []
+        let onItsWay = scheduled.map(\.index).filter { $0 >= bar ?? 0 }
+        if groove.soundsDifferent(from: old, inBars: sounding + onItsWay) { restartBar() }
+    }
+
+    /// Plays the bar you're in again from its first beat, with what's changed (or, in the
+    /// count-in, starts the count-in again).
+    private func restartBar() {
+        guard isPlaying, let timeline = AudioPlayer.shared.timeline() else { return }
+        AudioPlayer.shared.stopAll()
+        let start = timeline.frame + Int64(restartLead * sampleRate)
+        if let bar {
+            clock = BarClock(firstBarFrame: start, firstIndex: bar)
+            countInFrames = 0
+            scheduled = []
+            beat = 0
+        } else {
+            begin(at: start)
+        }
+        tick()
     }
 
     // MARK: - Scheduling

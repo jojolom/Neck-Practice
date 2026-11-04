@@ -93,7 +93,12 @@ struct PracticeView: View {
             BlockAppsView()
         }
         .fullScreenCover(isPresented: $showingSession) {
-            PracticeSessionView(plan: activePlan) { result in
+            PracticeSessionView(plan: activePlan, onStepChange: { stepID, config in
+                var plan = store.activePlan
+                guard let index = plan.steps.firstIndex(where: { $0.id == stepID }) else { return }
+                plan.steps[index].config = config
+                store.update(plan)
+            }) { result in
                 Analytics.dailyPracticeEnded(stepsPlanned: activePlan.steps.count,
                                              stepsCompleted: result.stepsCompleted, minutes: result.totalMinutes)
                 logSession(result: result)

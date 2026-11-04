@@ -66,12 +66,20 @@ final class CompositionPlayer {
     private var task: Task<Void, Never>?
     private var interruptionObserver: (any NSObjectProtocol)?
 
-    func play(_ composition: Composition, style: CompositionPlaybackStyle, bpm: Int) {
+    /// Something changed while it's playing: plays on from the first beat of the measure you're
+    /// in, with the change.
+    func restartMeasure(_ composition: Composition, style: CompositionPlaybackStyle, bpm: Int) {
+        guard isPlaying else { return }
+        play(composition, style: style, bpm: bpm, fromMeasure: playingMeasure ?? 0)
+    }
+
+    func play(_ composition: Composition, style: CompositionPlaybackStyle, bpm: Int, fromMeasure firstMeasure: Int = 0) {
         stop()
         // Rests are silent, but playback ends with the last chord or note rather than empty measures.
         guard !composition.isEmpty else { return }
         let beat = 60 / Double(min(max(bpm, Self.tempoRange.lowerBound), Self.tempoRange.upperBound))
-        AudioPlayer.shared.play(Self.notes(for: composition, style: style, beat: beat))
+        let firstTick = firstMeasure * composition.eighthsPerMeasure
+        let skipped = beat / 2 * Double(firstTick)
 
         // Highlight each chord and note while it sounds, and nothing in the rests between:
         // (time in eighths, which line, start or nil to clear).
@@ -86,6 +94,14 @@ final class CompositionPlayer {
             if !composition.melody.contains(where: { $0.start == note.end }) { events.append((note.end, false, nil, nil)) }
         }
         let end = events.map(\.tick).max() ?? 0
+        // The measure it was in is gone (or everything after it is): nothing left to play.
+        guard end > firstTick else { return }
+        AudioPlayer.shared.play(Self.notes(for: composition, style: style, beat: beat).compactMap { note in
+            guard note.delay >= skipped - 0.001 else { return nil }
+            var note = note
+            note.delay = max(note.delay - skipped, 0)
+            return note
+        })
         // Each measure as it's reached, through to the one the piece ends in.
         let eighthsPerMeasure = composition.eighthsPerMeasure
         for measure in 0..<max((end + eighthsPerMeasure - 1) / eighthsPerMeasure, 1) {
@@ -93,10 +109,11 @@ final class CompositionPlayer {
         }
         // Clearing first, so a chord ending where another starts doesn't blank the new one.
         events.sort { $0.tick != $1.tick ? $0.tick < $1.tick : ($0.start == nil && $1.start != nil) }
+        events.removeAll { $0.tick < firstTick }
 
         isPlaying = true
-        clock = Playhead(start: .now, secondsPerBeat: beat)
-        playingMeasure = 0
+        clock = Playhead(start: Date.now.addingTimeInterval(-skipped), secondsPerBeat: beat)
+        playingMeasure = firstMeasure
         interruptionObserver = AudioSessionSetup.observe(AVAudioSession.interruptionNotification) { [weak self] _ in
             self?.stop()
         }
@@ -106,7 +123,7 @@ final class CompositionPlayer {
             let eighth = beat / 2
             do {
                 for event in events {
-                    try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(event.tick))))
+                    try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(event.tick - firstTick))))
                     if let measure = event.measure {
                         self?.playingMeasure = measure
                     } else if event.isChord {
@@ -115,7 +132,7 @@ final class CompositionPlayer {
                         self?.playingNote = event.start
                     }
                 }
-                try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(end))))
+                try await clock.sleep(until: start.advanced(by: .seconds(eighth * Double(end - firstTick))))
             } catch {
                 return  // stopped
             }

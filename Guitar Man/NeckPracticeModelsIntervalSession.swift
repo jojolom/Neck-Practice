@@ -119,6 +119,27 @@ final class IntervalSession {
         drawNext()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let q = currentQuestion else { return true }
+        return pool.contains(q.interval) && abs(q.keySignature.fifths) <= maxAccidentals
+    }
+
+    /// Bonus Questions turned off: this round's bonus goes too.
+    func dropBonusIfOff() {
+        if !bonusQuestions { bonus = nil }
+    }
+
+    /// The number of choices changed: the question stays, its choices change (not yet answered).
+    func refreshChoices() {
+        guard let q = currentQuestion else { return }
+        let count = max(3, min(6, choiceCount))
+        guard q.choices.count != count else { return }
+        currentQuestion = IntervalQuestion(keySignature: q.keySignature, lower: q.lower, upper: q.upper,
+                                           interval: q.interval, descending: q.descending,
+                                           choices: ([q.interval] + q.interval.distractors(count - 1)).shuffled())
+    }
+
     /// Step 1: name the interval. Returns true if correct.
     @discardableResult
     func answerInterval(_ interval: Interval) -> Bool {

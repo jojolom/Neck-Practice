@@ -306,7 +306,7 @@ struct CompositionEditorView: View {
                         chordColors: player.playingChord.map { [$0: Color.accentColor] } ?? [:],
                         noteColors: player.playingNote.map { [$0: Color.accentColor] } ?? [:],
                         targetedSlot: targetedSlot,
-                        cursorSlot: player.isPlaying || tourStep != nil ? nil : (mode == .chords ? chordCursor : noteCursor),
+                        cursorSlot: tourStep != nil ? nil : (mode == .chords ? chordCursor : noteCursor),
                         playingMeasure: player.playingMeasure,
                         playhead: player.clock,
                         showsChordsUnderMelody: chordsUnderMelody,
@@ -387,10 +387,10 @@ struct CompositionEditorView: View {
                 startTour(after: 0.6)
             }
         }
-        // Playback is of what's on screen as it's set up now: any change stops it.
+        // Playback is of what's on screen as it's set up now: any change restarts the measure.
         .onDisappear { player.stop() }
-        .onChange(of: playbackStyle) { player.stop() }
-        .onChange(of: playbackTempo) { player.stop() }
+        .onChange(of: playbackStyle) { restartPlayback() }
+        .onChange(of: playbackTempo) { restartPlayback() }
         .onChange(of: hearPlayback) { player.stop() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { player.stop() }
@@ -423,7 +423,7 @@ struct CompositionEditorView: View {
         // Save as you go, once there's something to keep (and keep saving a saved one, so
         // clearing it sticks). Every change can be undone.
         .onChange(of: composition) { old, updated in
-            player.stop()
+            player.restartMeasure(updated, style: playbackStyle, bpm: playbackTempo)
             if isRestoring {
                 isRestoring = false
             } else {
@@ -447,6 +447,10 @@ struct CompositionEditorView: View {
     private var cursorMeasure: Int {
         let measure = mode == .chords ? chordCursor / composition.beatsPerMeasure : noteCursor / composition.eighthsPerMeasure
         return min(measure, composition.measureCount - 1)
+    }
+
+    private func restartPlayback() {
+        player.restartMeasure(composition, style: playbackStyle, bpm: playbackTempo)
     }
 
     private func scrollToMeasure(_ measure: Int, _ scroller: ScrollViewProxy) {
