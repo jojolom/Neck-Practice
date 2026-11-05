@@ -411,9 +411,11 @@ struct HomeView: View {
             onExpand()
         } label: {
             HStack(spacing: 10) {
+                // One column for every icon, so the titles all start at the same place.
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .frame(width: 24)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -431,6 +433,7 @@ struct HomeView: View {
                     .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
             }
             .padding(.vertical, 6)
+            .contentShape(Rectangle())   // the whole row, including the gap in the middle
         }
         .buttonStyle(.plain)
     }

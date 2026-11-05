@@ -276,6 +276,8 @@ struct CompositionEditorView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var player = CompositionPlayer()
     @State private var showSettings = false
+    /// When the cursor last moved during playback.
+    @State private var cursorMovedAt = Date.distantPast
     /// Chords drawn faded behind the melody (Compose Settings).
     @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
     /// The tour's step while it's showing (see ComposeTour).
@@ -333,10 +335,13 @@ struct CompositionEditorView: View {
                 }
                 // Keep the line being written, or played, in view.
                 .onChange(of: mode == .chords ? chordCursor : noteCursor) {
+                    if player.isPlaying { cursorMovedAt = .now }
                     scrollToMeasure(cursorMeasure, scroller)
                 }
+                // While you're writing during playback, the page stays with what you're writing.
                 .onChange(of: player.playingMeasure) { _, measure in
-                    if let measure { scrollToMeasure(measure, scroller) }
+                    guard let measure, Date.now.timeIntervalSince(cursorMovedAt) > Self.cursorHold else { return }
+                    scrollToMeasure(measure, scroller)
                 }
             }
         }
@@ -448,6 +453,9 @@ struct CompositionEditorView: View {
         let measure = mode == .chords ? chordCursor / composition.beatsPerMeasure : noteCursor / composition.eighthsPerMeasure
         return min(measure, composition.measureCount - 1)
     }
+
+    /// How long after the cursor moves the page stops following playback (seconds).
+    private static let cursorHold: TimeInterval = 4
 
     private func restartPlayback() {
         player.restartMeasure(composition, style: playbackStyle, bpm: playbackTempo)
