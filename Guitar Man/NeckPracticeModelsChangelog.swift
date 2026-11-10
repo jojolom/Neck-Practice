@@ -37,8 +37,8 @@ enum Changelog {
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
             version: "1.5",
-            released: "October 2026",
-            releasedOn: DateComponents(year: 2026, month: 10, day: 30),
+            released: "November 2026",
+            releasedOn: DateComponents(year: 2026, month: 11, day: 10),
             items: [
                 ChangelogItem(symbol: "guitars.fill", title: "Solo Buddy",
                               detail: "A backing track to practise your soloing over. Pick a key and up to four chords, or the 12-bar blues, choose a style from fingerpicked to funk, and solo along with the pentatonic box it shows, in any of its five positions."),
@@ -58,6 +58,8 @@ enum Changelog {
                               detail: "Settings now stick between visits and apply the moment you change them. Change a chord, key, style or tempo in Solo Buddy and the bar you're in restarts with it; the same goes for Compose playback. Scale Study's tempo and rhythm follow without waiting for the next round."),
                 ChangelogItem(symbol: "square.grid.2x2", title: "A tidier home screen",
                               detail: "Exercises are grouped into Fretboard, Theory and Play. Fold away any section you don't use, and it stays folded."),
+                ChangelogItem(symbol: "wrench.and.screwdriver", title: "Fixes",
+                              detail: "The Tuner and Compose's Play Along listen again when you come back to the app. Daily Practice starts each step fresh, even two of the same exercise in a row. Sight Reading asks the notes you miss more often. \"Move On by Itself\" no longer jumps a new question you've just started, and the reference screens stop playing when you leave."),
                 ChangelogItem(symbol: "checkmark.seal", title: "Keys named right in Scale Study",
                               detail: "Each key is now spelled from the one before it: the relative minor of F♯ major is D♯ minor, not E♭ minor."),
                 ChangelogItem(symbol: "arrow.up.arrow.down", title: "Intervals both ways",
