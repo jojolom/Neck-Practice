@@ -146,6 +146,7 @@ struct ScaleReferenceView: View {
     @SavedSetting("reference.scale.anchor") private var shapeAnchor: ShapeAnchor = .sixthString
     @State private var playingPosition: FretboardPosition? = nil
     @State private var isPlaying = false
+    @State private var playTask: Task<Void, Never>?
     @Environment(AudioSettings.self) private var audioSettings
 
     /// Conventional key roots for the current scale type, in circle-of-fifths order.
@@ -320,6 +321,10 @@ struct ScaleReferenceView: View {
             .padding(.vertical, 12)
         }
         .navigationTitle("Scale Reference")
+        .onDisappear { stopPlaying() }
+        .onChange(of: rootNote) { stopPlaying() }
+        .onChange(of: scaleType) { stopPlaying() }
+        .onChange(of: shapeAnchor) { stopPlaying() }
     }
 
     // MARK: - Playback
@@ -335,20 +340,25 @@ struct ScaleReferenceView: View {
 
         let interval = 0.22
 
-        for (i, position) in path.enumerated() {
-            let delay = Double(i) * interval
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        playTask = Task {
+            for position in path {
                 withAnimation(.easeInOut(duration: 0.1)) { playingPosition = position }
                 let octave = position.midiNote / 12 - 1
                 AudioPlayer.shared.playNote(position.note, octave: octave)
+                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
             }
-        }
-
-        let total = Double(path.count) * interval
-        DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.4) {
+            do { try await Task.sleep(for: .seconds(0.4)) } catch { return }
             withAnimation { playingPosition = nil }
             isPlaying = false
         }
+    }
+
+    private func stopPlaying() {
+        playTask?.cancel()
+        playTask = nil
+        AudioPlayer.shared.stopAll()
+        playingPosition = nil
+        isPlaying = false
     }
 }
 

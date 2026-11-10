@@ -79,10 +79,11 @@ final class SightReadingSession {
         if correct {
             score += 1
             streak += 1
-            weights[position.id] = max(1, (weights[position.id] ?? 1) - 1)
         } else {
             streak = 0
-            weights[position.id] = (weights[position.id] ?? 1) + 3
+        }
+        if let key = drawnPositionID {
+            weights[key] = correct ? max(1, (weights[key] ?? 1) - 1) : (weights[key] ?? 1) + 3
         }
         return correct
     }
@@ -113,9 +114,12 @@ final class SightReadingSession {
 
     // MARK: - Private
 
+    /// The pool position the current pitch was drawn from; its weight is what answers adjust.
+    private var drawnPositionID: String?
+
     private func drawNext() {
         let candidates = pool
-        guard !candidates.isEmpty else { currentPitch = nil; validPositions = []; return }
+        guard !candidates.isEmpty else { currentPitch = nil; drawnPositionID = nil; validPositions = []; return }
 
         // Weighted random selection, avoid repeating the same pitch.
         let weightedPool = candidates.flatMap { pos in
@@ -131,6 +135,7 @@ final class SightReadingSession {
 
         let pitch = StaffPitch(note: chosen.note, octave: chosen.octave)
         currentPitch = pitch
+        drawnPositionID = chosen.id
 
         // Find ALL positions that produce this exact pitch.
         validPositions = Set(candidates.filter { $0.midiNote == pitch.midi })

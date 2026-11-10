@@ -36,7 +36,7 @@ struct QuizSettingsView: View {
                 } header: {
                     Text("Fret Range")
                 } footer: {
-                    Text("Quiz will cover frets 0 through \(session.maxFret). Start low and work your way up!")
+                    Text("Quiz will cover frets 1 through \(session.maxFret). Start low and work your way up!")
                 }
 
                 Section {

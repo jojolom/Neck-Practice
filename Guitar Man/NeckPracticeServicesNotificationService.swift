@@ -102,6 +102,9 @@ final class NotificationService {
         let center = UNUserNotificationCenter.current()
         let saved = PracticeRemindersStore.loadPersisted()
 
+        scheduleTask?.cancel()
+        scheduleTask = nil
+
         guard saved.enabled else {
             center.removeAllPendingNotificationRequests()
             return
@@ -115,7 +118,6 @@ final class NotificationService {
             now: .now
         )
 
-        scheduleTask?.cancel()
         scheduleTask = Task {
             let settings = await center.notificationSettings()
             let allowed: Bool

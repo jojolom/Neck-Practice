@@ -211,7 +211,7 @@ final class PitchDetector {
 
     /// Listens again after iOS stopped the engine. The input may have changed (headphones, an
     /// interface), so the tap is installed fresh in its current format. Not in the background:
-    /// coming back to the app restarts it.
+    /// becoming active again restarts it.
     private func restartEngine() {
         guard isListening, UIApplication.shared.applicationState != .background else { return }
         stopEngine()
@@ -237,8 +237,9 @@ final class PitchDetector {
             AudioSessionSetup.observe(UIApplication.didEnterBackgroundNotification) { [weak self] _ in
                 self?.stopEngine()
             },
-            AudioSessionSetup.observe(UIApplication.willEnterForegroundNotification) { [weak self] _ in
-                self?.restartEngine()
+            AudioSessionSetup.observe(UIApplication.didBecomeActiveNotification) { [weak self] _ in
+                guard let self, !self.isTapInstalled else { return }
+                self.restartEngine()
             },
         ]
     }

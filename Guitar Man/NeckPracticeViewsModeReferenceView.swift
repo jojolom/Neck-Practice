@@ -17,6 +17,7 @@ struct ModeReferenceView: View {
     @State private var showIntro = false
     @State private var playingIndex: Int? = nil
     @State private var isPlaying = false
+    @State private var playTask: Task<Void, Never>?
     @Environment(AudioSettings.self) private var audioSettings
 
     private var scale: ModeScale { ModeScale(mode: mode, root: root) }
@@ -54,6 +55,9 @@ struct ModeReferenceView: View {
             .padding(.vertical, 12)
         }
         .navigationTitle("Modes")
+        .onDisappear { stopPlaying() }
+        .onChange(of: mode) { stopPlaying() }
+        .onChange(of: root) { stopPlaying() }
     }
 
     // MARK: - Sections
@@ -260,16 +264,24 @@ struct ModeReferenceView: View {
         isPlaying = true
         let pitches = scale.pitches()
         let step = 0.3
-        for (i, pitch) in pitches.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * step) {
+        playTask = Task {
+            for (i, pitch) in pitches.enumerated() {
                 playingIndex = i
                 AudioPlayer.shared.playNote(pitch.note, octave: pitch.soundingOctave)
+                do { try await Task.sleep(for: .seconds(step)) } catch { return }
             }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(pitches.count) * step + 0.4) {
+            do { try await Task.sleep(for: .seconds(0.4)) } catch { return }
             playingIndex = nil
             isPlaying = false
         }
+    }
+
+    private func stopPlaying() {
+        playTask?.cancel()
+        playTask = nil
+        AudioPlayer.shared.stopAll()
+        playingIndex = nil
+        isPlaying = false
     }
 }
 

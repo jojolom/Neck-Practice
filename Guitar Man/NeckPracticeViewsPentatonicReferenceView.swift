@@ -15,6 +15,7 @@ struct PentatonicReferenceView: View {
     @SavedSetting("reference.pentatonic.shape") private var shapeIndex: Int = 0
     @State private var playingPosition: FretboardPosition? = nil
     @State private var isPlaying = false
+    @State private var playTask: Task<Void, Never>?
     @Environment(AudioSettings.self) private var audioSettings
 
     /// Conventional key roots for the current quality, in circle-of-fifths order.
@@ -208,6 +209,10 @@ struct PentatonicReferenceView: View {
             .padding(.vertical, 12)
         }
         .navigationTitle("Pentatonic Shapes")
+        .onDisappear { stopPlaying() }
+        .onChange(of: rootNote) { stopPlaying() }
+        .onChange(of: quality) { stopPlaying() }
+        .onChange(of: shapeIndex) { stopPlaying() }
     }
 
     // MARK: - Playback
@@ -222,20 +227,25 @@ struct PentatonicReferenceView: View {
 
         let interval = 0.25
 
-        for (i, position) in path.enumerated() {
-            let delay = Double(i) * interval
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        playTask = Task {
+            for position in path {
                 withAnimation(.easeInOut(duration: 0.1)) { playingPosition = position }
                 let octave = position.midiNote / 12 - 1
                 AudioPlayer.shared.playNote(position.note, octave: octave)
+                do { try await Task.sleep(for: .seconds(interval)) } catch { return }
             }
-        }
-
-        let total = Double(path.count) * interval
-        DispatchQueue.main.asyncAfter(deadline: .now() + total + 0.4) {
+            do { try await Task.sleep(for: .seconds(0.4)) } catch { return }
             withAnimation { playingPosition = nil }
             isPlaying = false
         }
+    }
+
+    private func stopPlaying() {
+        playTask?.cancel()
+        playTask = nil
+        AudioPlayer.shared.stopAll()
+        playingPosition = nil
+        isPlaying = false
     }
 }
 

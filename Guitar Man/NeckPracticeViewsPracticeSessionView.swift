@@ -58,6 +58,7 @@ struct PracticeSessionView: View {
                 Group {
                     if let step = currentStep {
                         stepContent(for: step.kind)
+                            .id(step.id)
                     } else {
                         finishedView
                     }
