@@ -197,6 +197,8 @@ struct HomeView: View {
     /// Untyped, since screens pushed from Home add their own routes (Compose's editor).
     @State private var path = NavigationPath()
     @State private var whatsNew: ChangelogEntry?
+    /// Versions skipped since the last one seen, shown in the sheet as new too.
+    @State private var whatsNewAlso: [ChangelogEntry] = []
     @State private var showAbout = false
     // Which sections are open, remembered between launches.
     @AppStorage("home.show.fretboard") private var showFretboard = true
@@ -350,13 +352,14 @@ struct HomeView: View {
             }
             // After an update, show what changed — once.
             .sheet(item: $whatsNew) { entry in
-                WhatsNewView(entry: entry) {
+                WhatsNewView(entry: entry, alsoNew: whatsNewAlso) {
                     whatsNew = nil
                 }
                 .onDisappear { WhatsNewTracker.markSeen() }
             }
             .task {
                 if let entry = WhatsNewTracker.entryToPresent() {
+                    whatsNewAlso = WhatsNewTracker.alsoNew(before: entry)
                     whatsNew = entry
                 } else {
                     WhatsNewTracker.markSeen()

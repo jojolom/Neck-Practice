@@ -38,7 +38,7 @@ enum Changelog {
         ChangelogEntry(
             version: "1.6",
             released: "November 2026",
-            releasedOn: DateComponents(year: 2026, month: 11, day: 20),
+            releasedOn: DateComponents(year: 2026, month: 11, day: 10),
             items: [
                 ChangelogItem(symbol: "music.mic", title: "Blues Buddy",
                               detail: "A blues partner to solo over. It picks a bass line, drops in a chord or a triad here and there and throws in pentatonic fills, and never plays the same thing twice. Switch any of the three off, and choose the 12-bar, quick-change, minor or 8-bar blues, or just one chord, as a shuffle, a slow blues or straight."),
@@ -208,6 +208,20 @@ enum WhatsNewTracker {
 
         guard let installDate, let shipped = calendar.date(from: entry.releasedOn) else { return nil }
         return installDate < shipped ? entry : nil
+    }
+
+    /// The versions between the one last seen and `entry` (newest first): what someone who
+    /// skipped an update hasn't seen either. Empty if nothing was recorded.
+    static func alsoNew(
+        before entry: ChangelogEntry,
+        defaults: UserDefaults = .standard
+    ) -> [ChangelogEntry] {
+        guard let lastSeen = defaults.string(forKey: key),
+              let current = Changelog.entries.firstIndex(where: { $0.version == entry.version }),
+              let seen = Changelog.entries.firstIndex(where: { $0.version == lastSeen }),
+              seen > current + 1
+        else { return [] }
+        return Array(Changelog.entries[(current + 1)..<seen])
     }
 
     /// Remember that this version's notes were handled (shown, or not applicable).

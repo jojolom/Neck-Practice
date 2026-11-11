@@ -41,12 +41,14 @@ private struct ChangelogItemRow: View {
 struct WhatsNewView: View {
 
     let entry: ChangelogEntry
+    /// Versions the person skipped (between the last one they saw and this), shown as new too.
+    var alsoNew: [ChangelogEntry] = []
     let onContinue: () -> Void
 
-    /// Versions before this one, newest first.
+    /// Versions before this one and the skipped ones, newest first.
     private var earlier: [ChangelogEntry] {
         guard let index = Changelog.entries.firstIndex(where: { $0.version == entry.version }) else { return [] }
-        return Array(Changelog.entries[(index + 1)...])
+        return Array(Changelog.entries[(index + 1 + alsoNew.count)...])
     }
 
     var body: some View {
@@ -66,6 +68,20 @@ struct WhatsNewView: View {
 
                     ForEach(entry.items) { item in
                         ChangelogItemRow(item: item)
+                    }
+
+                    ForEach(alsoNew) { skipped in
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Also New in Version \(skipped.version)")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                            ForEach(skipped.items) { item in
+                                ChangelogItemRow(item: item)
+                            }
+                        }
+                        .padding(.top, 12)
+                        .accessibilityElement(children: .contain)
                     }
 
                     if !earlier.isEmpty {
