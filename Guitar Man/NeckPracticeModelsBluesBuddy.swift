@@ -106,7 +106,12 @@ enum BluesFeel: String, Codable, CaseIterable, Identifiable {
     /// the triplets of a slow blues.
     var slots: [Double] {
         switch self {
-        case .straight, .shuffle: return (0..<8).map { Double($0 / 2) + ($0 % 2 == 1 ? offbeat : 0) }
+        case .straight, .shuffle:
+            let late: Double = offbeat
+            return (0..<8).map { (i: Int) -> Double in
+                let beat: Double = Double(i / 2)
+                return i % 2 == 1 ? beat + late : beat
+            }
         case .slow:               return (0..<12).map { Double($0) / 3 }
         }
     }
