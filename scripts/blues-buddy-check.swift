@@ -12,7 +12,10 @@
 //  scale's name and notes, both follow rules bar by bar, and the fretboard in every key and
 //  position (the right notes, two a string, in one part of the neck whatever shows, the ♭5
 //  and the two 3rds marked). Grooves save and load; and Solo Buddy's old 12-bar grooves move
-//  over, once.
+//  over, once. Trade Licks: turns of one, two and four bars, a lick in every bar of Buddy's
+//  turn and none in yours, every lick note a dot that's showing (top four strings, one at a
+//  time, ending on a chord note with room left before your turn), a quiet backing under it,
+//  and cues that match the notes.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/blues-buddy-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsChord.swift" "Guitar Man/NeckPracticeModelsChordVoicing.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsSoloBuddy.swift" "Guitar Man/NeckPracticeModelsBluesBuddy.swift" scripts/blues-buddy-check.swift && /tmp/blues-buddy-check
@@ -40,6 +43,7 @@ struct BluesBuddyCheck {
         checkSwitches()
         checkDice()
         checkFills()
+        checkTradeLicks()
         checkPresetsAndSaving()
         checkMovingFromSoloBuddy()
         print(failures == 0 ? "All Blues Buddy checks passed." : "\(failures) failure(s).")
@@ -501,6 +505,152 @@ struct BluesBuddyCheck {
         let filled = (0..<1_200).filter { !only.bar($0, seed: 5).fill.isEmpty }.count
         check(filled > 1_000, "fills alone play most bars (\(filled) of 1200)")
         print("ok   fills: at the ends of lines, turnarounds half the time, curls and full chords turn up")
+    }
+
+    // MARK: Trade Licks
+
+    static func checkTradeLicks() {
+        // Turns: Buddy first, then you, so many bars each.
+        for length in BluesGroove.tradeLengths {
+            let g = BluesGroove(mode: .trade, tradeBars: length)
+            let turns = (0..<(length * 6)).map { g.turn(atBar: $0) }
+            let expected = (0..<(length * 6)).map { ($0 / length) % 2 == 0 ? BluesGroove.Turn.buddy : .you }
+            check(turns == expected, "turns of \(length): \(turns)")
+            check((0..<(length * 6)).allSatisfy { g.turnStart(ofBar: $0) == ($0 / length) * length }, "turn starts of \(length)")
+        }
+        check(BluesGroove().turn(atBar: 0) == nil && BluesGroove().bar(0, seed: 1).lick.isEmpty, "no turns jamming along")
+        check(BluesGroove(mode: .trade, tradeBars: 3).tradeBars == 2, "a turn is 1, 2 or 4 bars")
+        let odd = try? JSONDecoder().decode(BluesGroove.self, from: Data(#"{"mode":"trade","tradeBars":7}"#.utf8))
+        check(odd?.mode == .trade && odd?.tradeBars == 2, "and loads that way")
+        // Trading, fills are the licks: the bass and the chords are what can be switched.
+        for mix in switches {
+            let g = BluesGroove(bassPicking: mix.bass, chordStabs: mix.stabs, fills: mix.fills, mode: .trade)
+            check(g.plays.bass == (mix.bass || !mix.stabs) && g.plays.stabs == mix.stabs && !g.plays.fills, "what plays trading with \(mix)")
+        }
+
+        var bars = 0, lickNotes = 0, curls = 0, majorLicks = 0, minorLicks = 0
+        let end = Double(BluesGroove.beatsPerBar)
+        for form in BluesForm.allCases {
+            for feel in BluesFeel.allCases {
+                for root in Note.allCases {
+                    for showing in showings {
+                        for length in BluesGroove.tradeLengths {
+                            for position in 1...5 {
+                                // Bass and chords, bass alone, chords alone, and neither (the bass steps in).
+                                let mix = switches[[0, 2, 3, 6][(bars / 7) % 4]]
+                                let g = BluesGroove(keyRoot: root, form: form, feel: feel, bassPicking: mix.bass, chordStabs: mix.stabs,
+                                                    scale: showing.scale, followsChords: showing.rule != nil,
+                                                    followRule: showing.rule ?? .tonic, mode: .trade, tradeBars: length)
+                                let seed = UInt64(bars) &* 104_729 &+ 3
+                                let backing = BluesBacking(groove: g, seed: seed, position: position)
+                                for bar in 0..<(length * 4) {
+                                    bars += 1
+                                    let chord = g.chord(forBar: bar)
+                                    let played = g.bar(bar, seed: seed, position: position)
+                                    let label = "trading \(length)s, \(form) \(feel) in \(g.keyName), showing \(showing), position \(position), bar \(bar + 1) (\(chord.name))"
+                                    check(played.fill.isEmpty && played.fillSpan == nil && !played.isTurnaround, "\(label): no fills trading")
+                                    check(backing.hits(forBar: bar) == played.hits, "\(label): the backing plays the bar")
+                                    for hit in played.hits {
+                                        check((0..<end).contains(hit.beat) && hit.beats > 0.01 && hit.beat + hit.beats <= end + 0.001, "\(label): \(hit.beats) beats from \(hit.beat)")
+                                        check((40...88).contains(hit.midi) && hit.gain > 0 && hit.gain <= 1, "\(label): midi \(hit.midi), gain \(hit.gain)")
+                                    }
+                                    let lowRoot = SoloGroove.lowRoot(of: chord)
+
+                                    guard g.turn(atBar: bar) == .buddy else {
+                                        // Your turn: no lick, nothing to light, and the comping it would play jamming along without fills.
+                                        check(played.lick.isEmpty && backing.cues(forBar: bar).isEmpty, "\(label): no lick in your turn")
+                                        var jam = g
+                                        jam.mode = .jam
+                                        jam.fills = false
+                                        let comp = jam.bar(bar, seed: seed)
+                                        if g.plays.bass == jam.plays.bass {
+                                            check(played.bass == comp.bass && played.stabs == comp.stabs, "\(label): comping in your turn")
+                                        }
+                                        check(!played.hits.isEmpty, "\(label): something to play to")
+                                        continue
+                                    }
+
+                                    // Buddy's turn: a lick, one note at a time.
+                                    let lick = played.lick
+                                    lickNotes += lick.count
+                                    check(lick.count >= 2 && lick.count <= 2 * feel.slots.count, "\(label): a lick of \(lick.count)")
+                                    check(Set(lick.map(\.hit.beat)).count == lick.count, "\(label): two lick notes at once")
+                                    check(lick.map(\.hit) == lick.map(\.hit).sorted { $0.beat < $1.beat }, "\(label): lick in order")
+                                    for (a, b) in zip(lick, lick.dropFirst()) {
+                                        check(a.hit.beat + a.hit.beats <= b.hit.beat + 0.001, "\(label): lick notes overlap at \(b.hit.beat)")
+                                    }
+                                    // Every note is a dot that's showing, on the top four strings, and sounds like where it's played.
+                                    let board = g.fretboard(position: position, bar: bar)
+                                    let avoid = (chord.root.note.rawValue + 11) % 12
+                                    for note in lick {
+                                        check(board.marks[note.position] != nil, "\(label): lick note at \(note.position.id) isn't showing")
+                                        check(note.position.stringIndex <= 3, "\(label): lick on string \(note.position.stringIndex + 1)")
+                                        check(note.position.midiNote == note.hit.midi, "\(label): \(note.hit.midi) played at \(note.position.id)")
+                                        check(note.hit.midi % 12 != avoid, "\(label): the chord's major 7th")
+                                        check(note.hit.gain >= 0.5, "\(label): lick heard over the backing")
+                                    }
+                                    // In one scale for the bar, never the two pentatonics muddled.
+                                    let scale = g.lickScale(forBar: bar, seed: seed)
+                                    check(scale.scale != .both, "\(label): lick scale \(scale)")
+                                    let third = (chord.root.note.rawValue + 4) % 12
+                                    let plain = lick.enumerated().filter { i, note in
+                                        !(note.hit.midi % 12 == third && i > 0 && lick[i - 1].hit.midi == note.hit.midi - 1 && lick[i - 1].hit.beats <= 0.2)
+                                    }.map(\.element)
+                                    if plain.count < lick.count { curls += 1 }
+                                    check(plain.allSatisfy { scale.scale.steps.contains((($0.hit.midi - scale.root.rawValue) % 12 + 12) % 12) }, "\(label): lick off the \(scale.name)")
+                                    if showing.scale == .both && showing.rule == nil && !g.isMinor {
+                                        if scale.scale == .major { majorLicks += 1 } else { minorLicks += 1 }
+                                        check(scale.scale == .minor || g.form.degrees[g.index(ofBar: bar)] == 1, "\(label): major only over I")
+                                    }
+                                    // It ends on a note of the chord; the turn's last bar by beat 4, ringing, with room before your turn.
+                                    if let last = lick.last {
+                                        check(chord.pitchClasses.contains(last.hit.midi % 12), "\(label): the lick ends on \(last.hit.midi), not in \(chord.name)")
+                                        if bar - g.turnStart(ofBar: bar) == length - 1 {
+                                            check(last.hit.beat == 2 || last.hit.beat == 3, "\(label): the turn's last note is on beat \(last.hit.beat + 1)")
+                                            check(last.hit.beats >= 0.99, "\(label): and rings \(last.hit.beats)")
+                                        }
+                                    }
+                                    // Quiet under it: the root on the beat, and no chords but on the beat.
+                                    if g.plays.bass {
+                                        check(played.bass.map(\.beat) == [0, 1, 2, 3] && played.bass.allSatisfy { $0.midi == lowRoot && $0.gain < 0.5 }, "\(label): the bass under a lick")
+                                        check(played.stabs.allSatisfy { $0.beat == 0 }, "\(label): chords under a lick")
+                                    } else {
+                                        check(played.bass.isEmpty && played.stabs.allSatisfy { $0.beat == $0.beat.rounded() } && played.stabs.contains { $0.beat == 1 }, "\(label): chords keep the time under a lick")
+                                    }
+                                    for hit in played.stabs { check(chord.pitchClasses.contains(hit.midi % 12), "\(label): stab \(hit.midi)") }
+                                    // The cues are the lick, note for note.
+                                    let cues = backing.cues(forBar: bar)
+                                    check(cues.count == lick.count && zip(cues, lick).allSatisfy { cue, note in
+                                        cue.beat == note.hit.beat && cue.beats == note.hit.beats && BluesBacking.position(forCue: cue.id) == note.position
+                                    }, "\(label): cues")
+                                    for t in Set(played.hits.map(\.beat)) {
+                                        check(played.hits.filter { $0.beat <= t && t < $0.beat + $0.beats }.count <= 18, "\(label): too many ringing at \(t)")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        check(curls > 50, "licks curl where the major 3rd shows (\(curls))")
+        check(majorLicks > 200 && minorLicks > majorLicks, "showing Both, licks are one or the other: \(majorLicks) major, \(minorLicks) minor")
+
+        // A turn's bars share a rhythm two by two; takes differ; a take repeats.
+        let g = BluesGroove(keyRoot: .a, form: .twelveBar, feel: .straight, mode: .trade, tradeBars: 4)
+        var shared = 0
+        for seed in UInt64(1)...200 {
+            let first = g.bar(0, seed: seed).lick.map(\.hit.beat), third = g.bar(2, seed: seed).lick.map(\.hit.beat)
+            if first.dropLast() == third.dropLast() || first.prefix(3) == third.prefix(3) { shared += 1 }
+            check(g.bar(1, seed: seed) == g.bar(1, seed: seed), "a take repeats")
+        }
+        check(shared > 150, "bars 1 and 3 of a four-bar lick share a rhythm (\(shared) of 200)")
+        let takes = Set((UInt64(0)..<60).map { seed in "\((0..<4).map { g.bar($0, seed: seed &* 7 &+ 1).lick })" })
+        check(takes.count == 60, "\(takes.count) different licks in 60 takes")
+        // The position moves the lick with the box.
+        let low = g.bar(0, seed: 9, position: 1).lick.map(\.position.fret), high = g.bar(0, seed: 9, position: 4).lick.map(\.position.fret)
+        check((low.max() ?? 0) <= 9 && (high.min() ?? 0) >= 11, "licks at position 1 \(low) and 4 \(high)")
+        print("ok   trade licks: \(bars) bars, \(lickNotes) lick notes, every one a dot showing; \(curls) curls")
     }
 
     // MARK: Presets and saving

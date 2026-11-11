@@ -42,6 +42,8 @@ enum Changelog {
             items: [
                 ChangelogItem(symbol: "music.mic", title: "Blues Buddy",
                               detail: "A blues partner to solo over. It picks a bass line, drops in a chord or a triad here and there and throws in pentatonic fills, and never plays the same thing twice. Switch any of the three off, and choose the 12-bar, quick-change, minor or 8-bar blues, or just one chord, as a shuffle, a slow blues or straight."),
+                ChangelogItem(symbol: "bubble.left.and.bubble.right", title: "Trade Licks",
+                              detail: "Switch Blues Buddy to Trade Licks and it plays you a lick for one, two or four bars, then comps while you answer. Each note of its lick lights up on the fretboard as it sounds, in the box you have showing, so you can see it and steal it."),
                 ChangelogItem(symbol: "arrow.left.arrow.right", title: "Minor, major, blues or both",
                               detail: "Blues Buddy's fretboard shows the minor pentatonic, the major one, the blues scale, or both pentatonics at once, all in the same part of the neck, so you see what changes under your fingers when you switch. In Both, every dot is a scale degree: the ♭3 and the 3 sit a fret apart."),
                 ChangelogItem(symbol: "arrow.triangle.2.circlepath", title: "Follow the Chords",

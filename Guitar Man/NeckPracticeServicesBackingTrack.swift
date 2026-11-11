@@ -7,7 +7,8 @@
 //  before it's due (see BarClock), so every bar starts exactly where the last ended, and a
 //  change to the groove (chords, style, tempo, key) comes in at the next bar. An optional
 //  one-bar count-in and a click on every beat use the metronome's click (ClickVoice). Stops
-//  for calls and when the app goes to the background.
+//  for calls and when the app goes to the background. A source's cues (Blues Buddy's lick
+//  notes) are kept with their bars, and `cue` names the one sounding.
 //
 
 import AVFoundation
@@ -30,11 +31,15 @@ final class BackingTrack {
     /// The beat you're hearing in the bar (or in the count-in), 0-based.
     private(set) var beat = 0
     private(set) var isCountingIn = false
+    /// The cue sounding now (see BackingSource.cues), if the groove has any.
+    private(set) var cue: Int?
 
     /// How far ahead of its start a bar is handed to AudioPlayer.
     private let lookahead: TimeInterval = 0.3
     private var clock: BarClock?
     private var scheduled: [BarClock.Bar] = []
+    /// The cues of the bars in `scheduled`, by bar.
+    private var cues: [Int: [BackingCue]] = [:]
     private var countInStart: Int64 = 0
     private var countInFrames: Int64 = 0
     private var sampleRate: Double = 48_000
@@ -62,6 +67,8 @@ final class BackingTrack {
         }
         clock = BarClock(firstBarFrame: first)
         scheduled = []
+        cues = [:]
+        cue = nil
         isPlaying = true
         isCountingIn = countsIn
         bar = nil
@@ -86,6 +93,8 @@ final class BackingTrack {
         beat = 0
         clock = nil
         scheduled = []
+        cues = [:]
+        cue = nil
     }
 
     // MARK: - Scheduling
@@ -97,7 +106,10 @@ final class BackingTrack {
         self.clock = clock
         for bar in due { schedule(bar) }
         scheduled += due
-        if scheduled.count > 8 { scheduled.removeFirst(scheduled.count - 8) }
+        if scheduled.count > 8 {
+            scheduled.removeFirst(scheduled.count - 8)
+            if let oldest = scheduled.first?.index { cues = cues.filter { $0.key >= oldest } }
+        }
 
         // What you're hearing: the timeline runs a little ahead of the speaker.
         let session = AVAudioSession.sharedInstance()
@@ -106,6 +118,9 @@ final class BackingTrack {
             isCountingIn = false
             bar = position.index
             beat = min(Int(position.fraction * Double(groove.beatsPerBar)), groove.beatsPerBar - 1)
+            let beats = position.fraction * Double(groove.beatsPerBar)
+            let sounding = cues[position.index]?.last { $0.beat <= beats && beats < $0.beat + $0.beats }?.id
+            if sounding != cue { cue = sounding }
         } else if countInFrames > 0, heard >= countInStart {
             isCountingIn = true
             beat = min(Int(Double(heard - countInStart) / framesPerBeat), groove.beatsPerBar - 1)
@@ -114,6 +129,8 @@ final class BackingTrack {
 
     private func schedule(_ bar: BarClock.Bar) {
         let beatSeconds = Double(bar.frames) / sampleRate / Double(groove.beatsPerBar)
+        let barCues = groove.cues(forBar: bar.index)
+        if !barCues.isEmpty { cues[bar.index] = barCues }
         var notes = groove.hits(forBar: bar.index).map { hit in
             AudioPlayer.ScheduledNote(midi: hit.midi, delay: hit.beat * beatSeconds + hit.roll,
                                       duration: hit.beats * beatSeconds, gain: hit.gain)

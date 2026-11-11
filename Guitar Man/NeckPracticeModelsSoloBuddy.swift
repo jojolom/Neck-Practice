@@ -77,11 +77,25 @@ enum SoloForm: String, Codable {
     case loop, twelveBar
 }
 
-/// Anything BackingTrack can loop: a tempo, a bar length, and each bar's notes.
+/// Anything BackingTrack can loop: a tempo, a bar length, and each bar's notes. It can also
+/// name moments in a bar to show as they're heard (`cues`).
 protocol BackingSource {
     var secondsPerBeat: Double { get }
     var beatsPerBar: Int { get }
     func hits(forBar bar: Int) -> [SoloGroove.Hit]
+    func cues(forBar bar: Int) -> [BackingCue]
+}
+
+extension BackingSource {
+    func cues(forBar bar: Int) -> [BackingCue] { [] }
+}
+
+/// Something to show while part of a bar sounds: from `beat` for `beats`, named by `id`
+/// (Blues Buddy's lick notes, by where they're played).
+struct BackingCue: Equatable {
+    var beat: Double
+    var beats: Double
+    var id: Int
 }
 
 /// Everything Solo Buddy plays, and the scale it suggests soloing with. Saved between visits.

@@ -10,8 +10,9 @@
 //  a preset). Under it: the chord you're on and the next one, the form's bars with the one
 //  playing lit, what to solo with (the minor or major pentatonic, the blues scale, or both
 //  pentatonics at once, in one part of the neck; or Follow the Chords, which changes it bar by
-//  bar), and the settings. The groove playing is remembered, and saved grooves are kept
-//  (SavedBluesGrooves).
+//  bar), and the settings. In Trade Licks it plays a lick, each note lighting up on the
+//  fretboard as it sounds, then comps while you answer; the card says whose turn it is. The
+//  groove playing is remembered, and saved grooves are kept (SavedBluesGrooves).
 //
 
 import SwiftUI
@@ -52,7 +53,7 @@ struct BluesBuddyView: View {
                 }
             }
             .onAppear {
-                track.groove = BluesBacking(groove: groove, seed: seed)
+                track.groove = BluesBacking(groove: groove, seed: seed, position: position)
                 track.countsIn = countsIn
                 track.clicks = clicks
             }
@@ -62,8 +63,12 @@ struct BluesBuddyView: View {
                 if let preset = BluesPreset.preset(updated.presetID), !preset.groove.sameMusic(as: updated) {
                     groove.presetID = nil
                 }
-                track.groove = BluesBacking(groove: updated, seed: seed)
+                track.groove = BluesBacking(groove: updated, seed: seed, position: position)
                 SavedBluesGrooves.storeCurrent(updated)
+            }
+            // Licks are played where the fretboard shows them.
+            .onChange(of: position) {
+                track.groove = BluesBacking(groove: groove, seed: seed, position: position)
             }
             .onChange(of: saved) { _, updated in SavedBluesGrooves.store(updated) }
             .onChange(of: countsIn) { track.countsIn = countsIn }
@@ -149,6 +154,7 @@ struct BluesBuddyView: View {
                     .foregroundStyle(.secondary)
                     .opacity(track.isPlaying || groove.barCount <= 1 ? 1 : 0.6)
             }
+            turnBanner
             beatDots
         }
         .frame(maxWidth: .infinity)
@@ -157,6 +163,34 @@ struct BluesBuddyView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
+    }
+
+    /// Trade Licks: whose turn it is, and how long is left of it.
+    @ViewBuilder
+    private var turnBanner: some View {
+        if groove.mode == .trade {
+            let bar: Int? = track.isPlaying && !track.isCountingIn ? track.bar : nil
+            let turn: BluesGroove.Turn? = bar.flatMap { groove.turn(atBar: $0) }
+            let barsLeft = bar.map { groove.turnStart(ofBar: $0) + groove.tradeBars - $0 } ?? 0
+            Text(turnText(turn, barsLeft: barsLeft))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(turn == .you ? Color.white : Color.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(turn == .you ? Color.orange : Color(.tertiarySystemFill), in: Capsule())
+                .animation(.easeOut(duration: 0.15), value: turn)
+        }
+    }
+
+    private func turnText(_ turn: BluesGroove.Turn?, barsLeft: Int) -> String {
+        switch turn {
+        case .some(.buddy):
+            return barsLeft > 1 ? "Buddy's lick · your turn in \(barsLeft) bars" : "Buddy's lick · you're next"
+        case .some(.you):
+            return barsLeft > 1 ? "Your turn · \(barsLeft) bars left" : (groove.tradeBars > 1 ? "Your turn · last bar" : "Your turn")
+        case .none:
+            return "Buddy plays first, then it's your turn"
+        }
     }
 
     private var beatDots: some View {
@@ -254,6 +288,9 @@ struct BluesBuddyView: View {
     private var scaleCard: some View {
         let shown = groove.shownScale(forBar: shownBar)
         let board = groove.fretboard(position: position, bar: shownBar)
+        // Buddy's lick lights up note by note.
+        var dotColors = colors(for: board)
+        if let cue = track.cue { dotColors[BluesBacking.position(forCue: cue)] = .pink }
         return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(groove.followsChords ? "Following the chords" : "Solo with")
@@ -309,14 +346,14 @@ struct BluesBuddyView: View {
                 showHighlightedLabels: true,
                 keyContext: FretboardView.KeyContext(root: board.root, isMinor: board.spellsAsMinor),
                 customLabels: board.labels,
-                customColors: colors(for: board),
+                customColors: dotColors,
                 focusFrets: board.focus
             )
             .frame(height: 280)
             .padding(.horizontal, 8)
             .animation(.easeInOut(duration: 0.3), value: position)
 
-            Text(legend(for: shown))
+            Text(legend(for: shown) + (groove.mode == .trade ? " Buddy's lick lights up in pink as it sounds." : ""))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -361,18 +398,59 @@ struct BluesBuddyView: View {
 
     // MARK: - What it plays
 
-    /// The three switches. The last one on can't be switched off: something has to play.
+    /// Jam Along or Trade Licks, and the switches for what Buddy plays. The last one on can't
+    /// be switched off: something has to play. Trading, the licks take the fills' place.
     private var playsCard: some View {
-        let onCount = [groove.bassPicking, groove.chordStabs, groove.fills].filter { $0 }.count
+        let trading = groove.mode == .trade
+        let onCount = (trading ? [groove.bassPicking, groove.chordStabs]
+                               : [groove.bassPicking, groove.chordStabs, groove.fills]).filter { $0 }.count
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Buddy Plays")
+            Picker("Mode", selection: Binding(
+                get: { groove.mode },
+                set: { mode in
+                    groove.mode = mode
+                    // Something has to comp while you answer.
+                    if mode == .trade && !groove.bassPicking && !groove.chordStabs { groove.bassPicking = true }
+                }
+            )) {
+                ForEach(BluesMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(trading
+                 ? "Buddy plays a lick, then comps while you answer it. Its notes light up on the fretboard as they sound."
+                 : "Buddy comps and throws in fills while you solo.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, -6)
+
+            if trading {
+                HStack {
+                    Text("Each Turn").font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Spacer()
+                    Picker("Bars each turn", selection: $groove.tradeBars) {
+                        ForEach(BluesGroove.tradeLengths, id: \.self) { bars in
+                            Text(bars == 1 ? "1 Bar" : "\(bars) Bars").tag(bars)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 210)
+                }
+            }
+
+            Divider()
+            Text(trading ? "Buddy Comps With" : "Buddy Plays")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
             playsToggle("Bass Picking", "A boogie, a walk or a steady thumb that keeps the time.",
                         isOn: $groove.bassPicking, isLastOn: onCount == 1 && groove.bassPicking)
             playsToggle("Chord Stabs", "A full chord or a triad, dropped in here and there.",
                         isOn: $groove.chordStabs, isLastOn: onCount == 1 && groove.chordStabs)
-            playsToggle("Fills", "Short pentatonic licks, mostly at the ends of lines.",
-                        isOn: $groove.fills, isLastOn: onCount == 1 && groove.fills)
+            if !trading {
+                playsToggle("Fills", "Short pentatonic licks, mostly at the ends of lines.",
+                            isOn: $groove.fills, isLastOn: onCount == 1 && groove.fills)
+            }
             Text("It's different every time you tap Play.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -497,7 +575,7 @@ struct BluesBuddyView: View {
             } else {
                 // A new take.
                 seed = UInt64.random(in: 0...UInt64.max)
-                track.groove = BluesBacking(groove: groove, seed: seed)
+                track.groove = BluesBacking(groove: groove, seed: seed, position: position)
                 track.start()
             }
         } label: {
@@ -556,10 +634,11 @@ private struct BluesGroovesSheet: View {
         return !mine.groove.sameMusic(as: groove)
     }
 
-    /// "Bass, chords and fills".
+    /// "Bass, chords and fills", or trading, "Bass, chords and licks".
     static func playsList(_ groove: BluesGroove) -> String {
         let plays = groove.plays
-        let parts = [plays.bass ? "bass" : nil, plays.stabs ? "chords" : nil, plays.fills ? "fills" : nil].compactMap { $0 }
+        let parts = [plays.bass ? "bass" : nil, plays.stabs ? "chords" : nil, plays.fills ? "fills" : nil,
+                     groove.mode == .trade ? "licks" : nil].compactMap { $0 }
         let list = parts.count > 1 ? parts.dropLast().joined(separator: ", ") + " and " + (parts.last ?? "") : parts.first ?? ""
         return list.prefix(1).uppercased() + String(list.dropFirst())
     }

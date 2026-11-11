@@ -13,6 +13,11 @@
 //  with the notes that differ told apart. Or it follows the chords (`followsChords`), changing
 //  with each bar by one of two rules. Fills are made from what's showing.
 //
+//  Trade Licks (`mode == .trade`) is call and response: Blues Buddy plays a lick for one, two
+//  or four bars over a quiet backing, then comps for as long while you answer. Its licks are
+//  made from the dots showing, on the top four strings, so each note can light up on the
+//  fretboard as it sounds (`LickNote`, and `BluesBacking.cues`).
+//
 //  Nothing repeats: every bar is made up from a seed and its number (`bar(_:seed:)`), so one
 //  take differs from the next and from one chorus to the next, yet the same seed always gives
 //  the same bar (BackingTrack asks a bar at a time, and scripts/blues-buddy-check.swift can
@@ -162,6 +167,21 @@ enum BluesFollowRule: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Jam Along: it comps and throws in fills while you solo. Trade Licks: it plays a lick, then
+/// leaves you the same room to answer.
+enum BluesMode: String, Codable, CaseIterable, Identifiable {
+    case jam, trade
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .jam:   return "Jam Along"
+        case .trade: return "Trade Licks"
+        }
+    }
+}
+
 // MARK: - Groove
 
 /// Everything Blues Buddy plays, and the scale it shows. Saved between visits.
@@ -179,6 +199,9 @@ struct BluesGroove: Codable, Equatable {
     /// The fretboard changes with the chords instead, by `followRule`.
     var followsChords = false
     var followRule: BluesFollowRule = .tonic
+    var mode: BluesMode = .jam
+    /// Trade Licks: how many bars each turn lasts (1, 2 or 4).
+    var tradeBars = 2
     /// The preset it came from, if it's unchanged since (for the title).
     var presetID: String? = nil
     /// The saved groove it was opened from (it may have been changed since).
@@ -186,11 +209,12 @@ struct BluesGroove: Codable, Equatable {
 
     static let tempoRange = 40...160
     static let beatsPerBar = 4
+    static let tradeLengths = [1, 2, 4]
 
     init(keyRoot: Note = .a, form: BluesForm = .twelveBar, feel: BluesFeel = .shuffle, bpm: Int? = nil,
          bassPicking: Bool = true, chordStabs: Bool = true, fills: Bool = true,
          scale: BluesScale = .minor, followsChords: Bool = false, followRule: BluesFollowRule = .tonic,
-         presetID: String? = nil, savedID: UUID? = nil) {
+         mode: BluesMode = .jam, tradeBars: Int = 2, presetID: String? = nil, savedID: UUID? = nil) {
         self.keyRoot = keyRoot
         self.form = form
         self.feel = feel
@@ -201,12 +225,15 @@ struct BluesGroove: Codable, Equatable {
         self.scale = form.isMinor && !BluesScale.forMinorBlues.contains(scale) ? .minor : scale
         self.followsChords = followsChords
         self.followRule = followRule
+        self.mode = mode
+        self.tradeBars = Self.tradeLengths.contains(tradeBars) ? tradeBars : 2
         self.presetID = presetID
         self.savedID = savedID
     }
 
     private enum CodingKeys: String, CodingKey {
-        case keyRoot, form, feel, bpm, bassPicking, chordStabs, fills, scale, followsChords, followRule, presetID, savedID
+        case keyRoot, form, feel, bpm, bassPicking, chordStabs, fills, scale, followsChords, followRule, mode, tradeBars
+        case presetID, savedID
     }
 
     /// Every field has a default, so a groove saved by an older version still loads.
@@ -223,6 +250,9 @@ struct BluesGroove: Codable, Equatable {
         scale = form.isMinor && !BluesScale.forMinorBlues.contains(saved) ? .minor : saved
         followsChords = (try? c.decodeIfPresent(Bool.self, forKey: .followsChords)) ?? false
         followRule = (try? c.decodeIfPresent(BluesFollowRule.self, forKey: .followRule)) ?? .tonic
+        mode = (try? c.decodeIfPresent(BluesMode.self, forKey: .mode)) ?? .jam
+        let bars = (try? c.decodeIfPresent(Int.self, forKey: .tradeBars)) ?? 2
+        tradeBars = Self.tradeLengths.contains(bars) ? bars : 2
         presetID = try? c.decodeIfPresent(String.self, forKey: .presetID)
         savedID = try? c.decodeIfPresent(UUID.self, forKey: .savedID)
     }
@@ -269,9 +299,30 @@ struct BluesGroove: Codable, Equatable {
 
     var secondsPerBeat: Double { 60 / Double(min(max(bpm, Self.tempoRange.lowerBound), Self.tempoRange.upperBound)) }
 
-    /// The three switches as they play: the bass steps in if all are off.
+    /// The three switches as they play: the bass steps in if all are off. Trading licks there
+    /// are no fills (the licks take their place), so it's the bass and the chords that count.
     var plays: (bass: Bool, stabs: Bool, fills: Bool) {
-        (bassPicking || !(chordStabs || fills), chordStabs, fills)
+        mode == .trade
+            ? (bassPicking || !chordStabs, chordStabs, false)
+            : (bassPicking || !(chordStabs || fills), chordStabs, fills)
+    }
+
+    // MARK: Turns
+
+    enum Turn: Equatable {
+        case buddy, you
+    }
+
+    /// Whose turn bar `bar` is in Trade Licks (nil in Jam Along): Buddy's first, then yours,
+    /// `tradeBars` bars each.
+    func turn(atBar bar: Int) -> Turn? {
+        guard mode == .trade else { return nil }
+        return Int((Double(bar) / Double(tradeBars)).rounded(.down)) % 2 == 0 ? .buddy : .you
+    }
+
+    /// The first bar of the turn bar `bar` is in.
+    func turnStart(ofBar bar: Int) -> Int {
+        Int((Double(bar) / Double(tradeBars)).rounded(.down)) * tradeBars
     }
 }
 
@@ -346,6 +397,30 @@ extension BluesGroove {
         return best ?? area
     }
 
+    /// Where `scale` on `root` is played in `area`: a pentatonic's box nearest it; for the
+    /// blues scale, the minor box and the ♭5 wherever it falls among that box's frets; for
+    /// Both, the two boxes together.
+    static func dots(root: Note, scale: BluesScale, in area: PentatonicQuestion) -> Set<FretboardPosition> {
+        switch scale {
+        case .minor:
+            return Set(box(root: root, quality: .minor, nearest: area).shapePositions)
+        case .major:
+            return Set(box(root: root, quality: .major, nearest: area).shapePositions)
+        case .blues:
+            let box = box(root: root, quality: .minor, nearest: area)
+            var dots = Set(box.shapePositions)
+            let flatFifth = root.advanced(by: 6)
+            for string in 0..<stringCount {
+                for fret in box.minFret...box.maxFret where FretboardPosition(stringIndex: string, fret: fret).note == flatFifth {
+                    dots.insert(FretboardPosition(stringIndex: string, fret: fret))
+                }
+            }
+            return dots
+        case .both:
+            return dots(root: root, scale: .minor, in: area).union(dots(root: root, scale: .major, in: area))
+        }
+    }
+
     /// The dots for position `position` over bar `bar`.
     func fretboard(position: Int, bar: Int) -> BluesFretboard {
         let area = area(position: position)
@@ -353,38 +428,20 @@ extension BluesGroove {
         let root = choice.root.rawValue
         var marks: [FretboardPosition: BluesFretboard.Mark] = [:]
         var labels: [FretboardPosition: String] = [:]
-        func halfSteps(_ position: FretboardPosition) -> Int { ((position.note.rawValue - root) % 12 + 12) % 12 }
-        func add(_ quality: PentatonicQuality) -> PentatonicQuestion {
-            let box = Self.box(root: choice.root, quality: quality, nearest: area)
-            for position in box.shapePositions {
-                marks[position] = halfSteps(position) == 0 ? .root : .tone
-            }
-            return box
-        }
-
-        switch choice.scale {
-        case .minor:
-            _ = add(.minor)
-        case .major:
-            _ = add(.major)
-        case .blues:
-            // The minor box, and the ♭5 wherever it falls among its frets.
-            let box = add(.minor)
-            let name = flatFifthName
-            for string in 0..<stringCount {
-                for fret in box.minFret...box.maxFret {
-                    let position = FretboardPosition(stringIndex: string, fret: fret)
-                    guard halfSteps(position) == 6 else { continue }
+        for position in Self.dots(root: choice.root, scale: choice.scale, in: area) {
+            let step = ((position.note.rawValue - root) % 12 + 12) % 12
+            marks[position] = step == 0 ? .root : .tone
+            switch choice.scale {
+            case .minor, .major:
+                break
+            case .blues:
+                // The ♭5, spelled for the key.
+                if step == 6 {
                     marks[position] = .blueNote
-                    labels[position] = name
+                    labels[position] = flatFifthName
                 }
-            }
-        case .both:
-            // Both boxes, every dot named by its degree: the ♭3 and the 3 sit a fret apart.
-            _ = add(.minor)
-            _ = add(.major)
-            for position in Array(marks.keys) {
-                let step = halfSteps(position)
+            case .both:
+                // Every dot named by its degree: the ♭3 and the 3 sit a fret apart.
                 labels[position] = BluesFretboard.degreeNames[step]
                 if BluesScale.minor.steps.contains(step) != BluesScale.major.steps.contains(step) {
                     marks[position] = BluesScale.minor.steps.contains(step) ? .minorOnly : .majorOnly
@@ -448,7 +505,7 @@ struct BluesFretboard: Equatable {
 struct BluesDice {
 
     enum Layer: UInt64 {
-        case bassLine = 1, bass, stabs, fill, turnaround, scale
+        case bassLine = 1, bass, stabs, fill, turnaround, scale, lickRhythm, lick
     }
 
     private var state: UInt64
@@ -498,30 +555,45 @@ extension BluesGroove {
         var fillSpan: Range<Double>? = nil
         /// The fill is the turnaround's walk down to the 5th.
         var isTurnaround = false
+        /// Trade Licks: Buddy's lick, in its turn.
+        var lick: [LickNote] = []
 
-        var hits: [Hit] { bass + stabs + fill }
+        var hits: [Hit] { bass + stabs + fill + lick.map(\.hit) }
     }
 
-    /// What plays in bar `bar` of the take that `seed` names.
-    func hits(forBar bar: Int, seed: UInt64) -> [Hit] {
-        self.bar(bar, seed: seed).hits
+    /// A note of a lick, and where it's played, so the fretboard can light it up.
+    struct LickNote: Equatable {
+        var hit: Hit
+        var position: FretboardPosition
     }
 
-    func bar(_ bar: Int, seed: UInt64) -> Bar {
+    /// What plays in bar `bar` of the take that `seed` names (licks at `position`).
+    func hits(forBar bar: Int, seed: UInt64, position: Int = 1) -> [Hit] {
+        self.bar(bar, seed: seed, position: position).hits
+    }
+
+    func bar(_ bar: Int, seed: UInt64, position: Int = 1) -> Bar {
         let chord = chord(forBar: bar)
         var out = Bar()
-        if plays.fills, let fill = fill(forBar: bar, seed: seed, chord: chord) {
+        let isCall = turn(atBar: bar) == .buddy
+        if isCall {
+            out.lick = lick(forBar: bar, seed: seed, position: position, chord: chord)
+        } else if plays.fills, let fill = fill(forBar: bar, seed: seed, chord: chord) {
             out.fill = fill.hits
             out.fillSpan = fill.span
             out.isTurnaround = fill.isTurnaround
         }
         if plays.bass {
-            let thinFrom = out.fillSpan.flatMap { $0.isEmpty ? nil : Int($0.lowerBound) }
+            // Under Buddy's lick, as under a fill, the bass is just the root on the beat.
+            let thinFrom = isCall ? 0 : out.fillSpan.flatMap { $0.isEmpty ? nil : Int($0.lowerBound) }
             out.bass = bass(forBar: bar, seed: seed, chord: chord, thinFrom: thinFrom)
         }
         if plays.stabs {
             out.stabs = stabs(forBar: bar, seed: seed, chord: chord)
             if let span = out.fillSpan { out.stabs.removeAll { span.contains($0.beat) } }
+            // And the chords keep out of the lick's way: the chord on beat 1 where there is
+            // one, or, with no bass to keep the time, whatever falls on a beat.
+            if isCall { out.stabs.removeAll { plays.bass ? $0.beat != 0 : $0.beat != $0.beat.rounded() } }
         }
         // Every note stops by the barline, so the next chord comes in clean.
         let end = Double(Self.beatsPerBar)
@@ -536,6 +608,101 @@ extension BluesGroove {
         out.stabs = clipped(out.stabs)
         out.fill = clipped(out.fill)
         return out
+    }
+
+    // MARK: Licks
+
+    /// The scale a lick in bar `bar` is made from: what's showing. Of Both it's one or the
+    /// other for the whole turn (the minor one over IV and V).
+    func lickScale(forBar bar: Int, seed: UInt64) -> ScaleChoice {
+        var choice = shownScale(forBar: bar)
+        if choice.scale == .both {
+            var dice = BluesDice(seed: seed, bar: turnStart(ofBar: bar), layer: .scale)
+            let major = dice.chance(0.5)
+            choice.scale = major && form.degrees[index(ofBar: bar)] == 1 ? .major : .minor
+        }
+        return choice
+    }
+
+    /// The notes a lick in bar `bar` can use, low to high: the dots of its scale at `position`
+    /// on the top four strings, without the one note that fights the chord (its major 7th:
+    /// the key's major 3rd over the IV chord).
+    func lickPool(forBar bar: Int, seed: UInt64, position: Int) -> [FretboardPosition] {
+        let choice = lickScale(forBar: bar, seed: seed)
+        let avoid = chord(forBar: bar).root.note.advanced(by: 11)
+        var heard = Set<Int>()
+        return Self.dots(root: choice.root, scale: choice.scale, in: area(position: position))
+            .filter { $0.stringIndex <= 3 && $0.note != avoid }
+            .sorted { ($0.midiNote, $0.stringIndex) < ($1.midiNote, $1.stringIndex) }
+            .filter { heard.insert($0.midiNote).inserted }
+    }
+
+    /// Buddy's lick in bar `bar` of its turn: a phrase from early in the bar to a note of the
+    /// chord. Bars of a turn share a rhythm two by two, so a longer lick has a shape to it,
+    /// and the turn's last bar lands by beat 3 or 4 on the chord's root, likeliest, and rings:
+    /// that's your cue.
+    private func lick(forBar bar: Int, seed: UInt64, position: Int, chord: CompositionChord) -> [LickNote] {
+        let pool = lickPool(forBar: bar, seed: seed, position: position)
+        guard pool.count > 2 else { return [] }
+        let start = turnStart(ofBar: bar)
+        let isLast = bar - start == tradeBars - 1
+        let slots = feel.slots
+        let perBeat = slots.count / Self.beatsPerBar
+
+        // When: the rhythm the turn's odd or even bars share.
+        var rhythm = BluesDice(seed: seed, bar: start * 2 + (bar - start) % 2, layer: .lickRhythm)
+        let first = rhythm.pick([(0, 0.4), (1, 0.35), (perBeat, 0.25)])
+        let sounds = slots.indices.map { _ in rhythm.chance(0.7) }
+        var dice = BluesDice(seed: seed, bar: bar, layer: .lick)
+        let landing = isLast
+            ? dice.pick([(2 * perBeat, 0.6), (3 * perBeat, 0.4)])
+            : dice.pick([(3 * perBeat, 0.5), (slots.count - 1, 0.3), (2 * perBeat, 0.2)])
+        let onsets = [first] + ((first + 1)..<landing).filter { sounds[$0] } + [landing]
+
+        // What: as a fill, it ends on a note of the chord and walks there through the scale.
+        let chordRoot = chord.root.note.rawValue
+        var targets: [(Int, Double)] = pool.indices.compactMap { i in
+            let pitchClass = pool[i].note.rawValue
+            guard chord.pitchClasses.contains(pitchClass) else { return nil }
+            return (i, pitchClass == chordRoot ? (isLast ? 6 : 3) : 1)
+        }
+        if targets.isEmpty { targets = pool.indices.map { ($0, 1) } }
+        var index = dice.pick(targets)
+        var line = [index]
+        // Mostly from above, but from wherever there's room: not down to the top note.
+        let roll = dice.chance(0.6)
+        let fromAbove = index >= pool.count - 2 ? false : index <= 1 ? true : roll
+        for _ in 1..<onsets.count {
+            let step = dice.pick([(1, 0.6), (-1, 0.25), (2, 0.15)]) * (fromAbove ? 1 : -1)
+            var next = index + step
+            if !pool.indices.contains(next) { next = index - step }
+            next = min(max(next, 0), pool.count - 1)
+            if next == index { next = index > 0 ? index - 1 : index + 1 }
+            index = next
+            line.insert(index, at: 0)
+        }
+
+        // The curl (minor 3rd nudged up to the major 3rd), where the major 3rd is a dot too.
+        let shown = fretboard(position: position, bar: bar).marks
+        let curls = chord.pitchClasses.contains((chordRoot + 4) % 12)
+        let end = Double(Self.beatsPerBar)
+        var notes: [LickNote] = []
+        for (i, slot) in onsets.enumerated() {
+            let beat = slots[slot]
+            let isLanding = i == onsets.count - 1
+            let length = isLanding ? min(end - beat, isLast ? 2 : 1.5) : slots[onsets[i + 1]] - beat
+            let dot = pool[line[i]]
+            let gain: Float = isLanding ? 0.9 : (slot % perBeat == 0 ? 0.85 : 0.7)
+            let above = FretboardPosition(stringIndex: dot.stringIndex, fret: dot.fret + 1)
+            if curls, !isLanding, dot.note.rawValue == (chordRoot + 3) % 12, shown[above] != nil, dice.chance(0.5) {
+                let grace = min(length / 3, 0.16)
+                notes.append(LickNote(hit: Hit(beat: beat, midi: dot.midiNote, beats: grace, gain: gain * 0.8), position: dot))
+                notes.append(LickNote(hit: Hit(beat: beat + grace, midi: above.midiNote, beats: length - grace, gain: gain), position: above))
+            } else {
+                notes.append(LickNote(hit: Hit(beat: beat, midi: dot.midiNote, beats: length, gain: gain), position: dot))
+            }
+        }
+        return notes
     }
 
     // MARK: Bass
@@ -813,17 +980,29 @@ extension BluesGroove {
 
 // MARK: - Backing
 
-/// One take of a groove, for BackingTrack: the groove and the seed its bars are rolled from.
+/// One take of a groove, for BackingTrack: the groove, the seed its bars are rolled from, and
+/// the position on the neck its licks are played at.
 struct BluesBacking: BackingSource {
     var groove: BluesGroove
     var seed: UInt64
+    var position = 1
 
     var secondsPerBeat: Double { groove.secondsPerBeat }
     var beatsPerBar: Int { BluesGroove.beatsPerBar }
 
     func hits(forBar bar: Int) -> [SoloGroove.Hit] {
-        groove.hits(forBar: bar, seed: seed)
+        groove.hits(forBar: bar, seed: seed, position: position)
     }
+
+    /// The lick's notes, each named by where it's played, to light the fretboard as it sounds.
+    func cues(forBar bar: Int) -> [BackingCue] {
+        groove.bar(bar, seed: seed, position: position).lick.map {
+            BackingCue(beat: $0.hit.beat, beats: $0.hit.beats, id: Self.cueID($0.position))
+        }
+    }
+
+    static func cueID(_ position: FretboardPosition) -> Int { position.stringIndex * 100 + position.fret }
+    static func position(forCue id: Int) -> FretboardPosition { FretboardPosition(stringIndex: id / 100, fret: id % 100) }
 }
 
 // MARK: - Presets
