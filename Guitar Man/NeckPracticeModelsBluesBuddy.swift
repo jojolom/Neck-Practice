@@ -8,6 +8,11 @@
 //  short pentatonic fills where a singer would leave room. Each of the three has its own
 //  switch.
 //
+//  The fretboard shows what to solo with on the key's root, in one area of the neck: the minor
+//  pentatonic, the major one, the blues scale (minor with the ♭5), or both pentatonics at once
+//  with the notes that differ told apart. Or it follows the chords (`followsChords`), changing
+//  with each bar by one of two rules. Fills are made from what's showing.
+//
 //  Nothing repeats: every bar is made up from a seed and its number (`bar(_:seed:)`), so one
 //  take differs from the next and from one chorus to the next, yet the same seed always gives
 //  the same bar (BackingTrack asks a bar at a time, and scripts/blues-buddy-check.swift can
@@ -102,9 +107,64 @@ enum BluesFeel: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Scale
+
+/// What Blues Buddy's fretboard shows on a root.
+enum BluesScale: String, Codable, CaseIterable, Identifiable {
+    case minor, major, blues, both
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .minor: return "Minor"
+        case .major: return "Major"
+        case .blues: return "Blues"
+        case .both:  return "Both"
+        }
+    }
+
+    /// Its notes, in half steps above the root.
+    var steps: Set<Int> {
+        switch self {
+        case .minor: return [0, 3, 5, 7, 10]
+        case .major: return [0, 2, 4, 7, 9]
+        case .blues: return [0, 3, 5, 6, 7, 10]
+        case .both:  return [0, 2, 3, 4, 5, 7, 9, 10]
+        }
+    }
+
+    /// The ones that suit a minor blues: the major pentatonic's 3rd fights its chords.
+    static let forMinorBlues: [BluesScale] = [.minor, .blues]
+}
+
+/// How the fretboard follows the chords.
+enum BluesFollowRule: String, Codable, CaseIterable, Identifiable {
+    /// On the key's root throughout: major pentatonic over I, minor over IV and V.
+    case tonic
+    /// Each chord's own pentatonic, on the chord's root.
+    case chord
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .tonic: return "Major on I, Minor on IV & V"
+        case .chord: return "Each Chord's Own"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .tonic: return "Stays on the key's root: the major pentatonic over the I chord, the minor over IV and V."
+        case .chord: return "Moves with the chords: each one's own pentatonic, on its root, in the same part of the neck."
+        }
+    }
+}
+
 // MARK: - Groove
 
-/// Everything Blues Buddy plays, and the pentatonic it shows. Saved between visits.
+/// Everything Blues Buddy plays, and the scale it shows. Saved between visits.
 struct BluesGroove: Codable, Equatable {
     var keyRoot: Note = .a
     var form: BluesForm = .twelveBar
@@ -114,8 +174,11 @@ struct BluesGroove: Codable, Equatable {
     var bassPicking = true
     var chordStabs = true
     var fills = true
-    /// The pentatonic to solo with, on the key's tonic (always minor in a minor blues).
-    var scale: PentatonicQuality = .minor
+    /// What to solo with, on the key's tonic (minor or blues in a minor blues).
+    var scale: BluesScale = .minor
+    /// The fretboard changes with the chords instead, by `followRule`.
+    var followsChords = false
+    var followRule: BluesFollowRule = .tonic
     /// The preset it came from, if it's unchanged since (for the title).
     var presetID: String? = nil
     /// The saved groove it was opened from (it may have been changed since).
@@ -126,7 +189,8 @@ struct BluesGroove: Codable, Equatable {
 
     init(keyRoot: Note = .a, form: BluesForm = .twelveBar, feel: BluesFeel = .shuffle, bpm: Int? = nil,
          bassPicking: Bool = true, chordStabs: Bool = true, fills: Bool = true,
-         scale: PentatonicQuality = .minor, presetID: String? = nil, savedID: UUID? = nil) {
+         scale: BluesScale = .minor, followsChords: Bool = false, followRule: BluesFollowRule = .tonic,
+         presetID: String? = nil, savedID: UUID? = nil) {
         self.keyRoot = keyRoot
         self.form = form
         self.feel = feel
@@ -134,13 +198,15 @@ struct BluesGroove: Codable, Equatable {
         self.bassPicking = bassPicking
         self.chordStabs = chordStabs
         self.fills = fills
-        self.scale = form.isMinor ? .minor : scale
+        self.scale = form.isMinor && !BluesScale.forMinorBlues.contains(scale) ? .minor : scale
+        self.followsChords = followsChords
+        self.followRule = followRule
         self.presetID = presetID
         self.savedID = savedID
     }
 
     private enum CodingKeys: String, CodingKey {
-        case keyRoot, form, feel, bpm, bassPicking, chordStabs, fills, scale, presetID, savedID
+        case keyRoot, form, feel, bpm, bassPicking, chordStabs, fills, scale, followsChords, followRule, presetID, savedID
     }
 
     /// Every field has a default, so a groove saved by an older version still loads.
@@ -153,12 +219,15 @@ struct BluesGroove: Codable, Equatable {
         bassPicking = (try? c.decodeIfPresent(Bool.self, forKey: .bassPicking)) ?? true
         chordStabs = (try? c.decodeIfPresent(Bool.self, forKey: .chordStabs)) ?? true
         fills = (try? c.decodeIfPresent(Bool.self, forKey: .fills)) ?? true
-        scale = (try? c.decodeIfPresent(PentatonicQuality.self, forKey: .scale)) ?? .minor
+        let saved = (try? c.decodeIfPresent(BluesScale.self, forKey: .scale)) ?? .minor
+        scale = form.isMinor && !BluesScale.forMinorBlues.contains(saved) ? .minor : saved
+        followsChords = (try? c.decodeIfPresent(Bool.self, forKey: .followsChords)) ?? false
+        followRule = (try? c.decodeIfPresent(BluesFollowRule.self, forKey: .followRule)) ?? .tonic
         presetID = try? c.decodeIfPresent(String.self, forKey: .presetID)
         savedID = try? c.decodeIfPresent(UUID.self, forKey: .savedID)
     }
 
-    /// The same music (key, form, feel, tempo, what plays, scale), wherever it came from.
+    /// The same music (key, form, feel, tempo, what plays, what shows), wherever it came from.
     func sameMusic(as other: BluesGroove) -> Bool {
         var a = self, b = other
         a.presetID = nil; a.savedID = nil
@@ -179,9 +248,6 @@ struct BluesGroove: Codable, Equatable {
 
     /// "A", or "A Minor" for a minor blues.
     var keyName: String { isMinor ? keySignature.minorKeyName : tonicName }
-
-    /// "A minor pentatonic".
-    var scaleName: String { "\(tonicName) \(scale.displayName.lowercased()) pentatonic" }
 
     var barCount: Int { form.degrees.count }
 
@@ -209,6 +275,172 @@ struct BluesGroove: Codable, Equatable {
     }
 }
 
+// MARK: - What to solo with
+
+extension BluesGroove {
+
+    /// A scale on a root: what the fretboard shows, or what a fill is made from.
+    struct ScaleChoice: Equatable {
+        var root: Note
+        /// The root as it's spelled: "B♭".
+        var rootName: String
+        var scale: BluesScale
+
+        /// "A minor pentatonic", "A blues scale", "A minor + major pentatonic".
+        var name: String {
+            switch scale {
+            case .minor: return "\(rootName) minor pentatonic"
+            case .major: return "\(rootName) major pentatonic"
+            case .blues: return "\(rootName) blues scale"
+            case .both:  return "\(rootName) minor + major pentatonic"
+            }
+        }
+    }
+
+    /// The rule in force: a minor blues can only follow each chord's own (its i and iv want the
+    /// minor pentatonic anyway, so the other rule would never change).
+    var activeFollowRule: BluesFollowRule { isMinor ? .chord : followRule }
+
+    /// What the fretboard shows over bar `bar`: the scale picked, or, following the chords,
+    /// the one the rule gives that bar's chord.
+    func shownScale(forBar bar: Int) -> ScaleChoice {
+        guard followsChords else { return ScaleChoice(root: keyRoot, rootName: tonicName, scale: scale) }
+        switch activeFollowRule {
+        case .tonic:
+            let onTonicChord = form.degrees[index(ofBar: bar)] == 1
+            return ScaleChoice(root: keyRoot, rootName: tonicName, scale: onTonicChord ? .major : .minor)
+        case .chord:
+            let chord = chord(forBar: bar)
+            return ScaleChoice(root: chord.root.note, rootName: chord.root.name,
+                               scale: chord.quality == .minor ? .minor : .major)
+        }
+    }
+
+    /// The part of the neck position `position` (1–5) names: the key's minor pentatonic box
+    /// there. Whatever shows is drawn in this area, so switching scales changes the notes
+    /// under your fingers and not where your hand is.
+    func area(position: Int) -> PentatonicQuestion {
+        let index = min(max(position, 1), allPentatonicShapes.count) - 1
+        return PentatonicQuestion(shape: allPentatonicShapes[index], quality: .minor, key: keyRoot)
+    }
+
+    /// The box of `quality`'s pentatonic on `root` that sits nearest `area` (the lower, if two
+    /// are as near).
+    static func box(root: Note, quality: PentatonicQuality, nearest area: PentatonicQuestion) -> PentatonicQuestion {
+        let minorRoot = quality.isMinor ? root : root.relativeMinor
+        let base = fretOnLowE(for: minorRoot)
+        let centre = Double(area.minFret + area.maxFret) / 2
+        var best: PentatonicQuestion? = nil
+        var bestDistance = Double.infinity
+        for shape in allPentatonicShapes {
+            for anchor in [base - 12, base, base + 12, base + 24] {
+                let box = PentatonicQuestion(shape: shape, quality: quality, rootNote: minorRoot, anchorFret: anchor)
+                guard box.minFret >= 1, box.maxFret <= 24 else { continue }
+                let distance = abs(Double(box.minFret + box.maxFret) / 2 - centre)
+                if distance < bestDistance - 0.001 || (abs(distance - bestDistance) <= 0.001 && box.minFret < (best?.minFret ?? .max)) {
+                    best = box
+                    bestDistance = distance
+                }
+            }
+        }
+        return best ?? area
+    }
+
+    /// The dots for position `position` over bar `bar`.
+    func fretboard(position: Int, bar: Int) -> BluesFretboard {
+        let area = area(position: position)
+        let choice = shownScale(forBar: bar)
+        let root = choice.root.rawValue
+        var marks: [FretboardPosition: BluesFretboard.Mark] = [:]
+        var labels: [FretboardPosition: String] = [:]
+        func halfSteps(_ position: FretboardPosition) -> Int { ((position.note.rawValue - root) % 12 + 12) % 12 }
+        func add(_ quality: PentatonicQuality) -> PentatonicQuestion {
+            let box = Self.box(root: choice.root, quality: quality, nearest: area)
+            for position in box.shapePositions {
+                marks[position] = halfSteps(position) == 0 ? .root : .tone
+            }
+            return box
+        }
+
+        switch choice.scale {
+        case .minor:
+            _ = add(.minor)
+        case .major:
+            _ = add(.major)
+        case .blues:
+            // The minor box, and the ♭5 wherever it falls among its frets.
+            let box = add(.minor)
+            let name = flatFifthName
+            for string in 0..<stringCount {
+                for fret in box.minFret...box.maxFret {
+                    let position = FretboardPosition(stringIndex: string, fret: fret)
+                    guard halfSteps(position) == 6 else { continue }
+                    marks[position] = .blueNote
+                    labels[position] = name
+                }
+            }
+        case .both:
+            // Both boxes, every dot named by its degree: the ♭3 and the 3 sit a fret apart.
+            _ = add(.minor)
+            _ = add(.major)
+            for position in Array(marks.keys) {
+                let step = halfSteps(position)
+                labels[position] = BluesFretboard.degreeNames[step]
+                if BluesScale.minor.steps.contains(step) != BluesScale.major.steps.contains(step) {
+                    marks[position] = BluesScale.minor.steps.contains(step) ? .minorOnly : .majorOnly
+                }
+            }
+        }
+
+        let frets = marks.keys.map(\.fret)
+        return BluesFretboard(marks: marks, labels: labels, root: choice.root, spellsAsMinor: choice.scale != .major,
+                              frets: (frets.min() ?? area.minFret)...(frets.max() ?? area.maxFret),
+                              focus: max(area.minFret - 1, 1)...(area.maxFret + 1))
+    }
+
+    /// The key's ♭5 as it's spelled: "E♭" in A. Where that would take a double flat (A𝄫 in
+    /// D♭), the note's plain name instead: "G".
+    var flatFifthName: String {
+        let tonic = isMinor ? keySignature.minorTonic : keySignature.majorTonic
+        let letter = (tonic.letter + 4) % 7
+        guard let pitch = SpelledPitch(midi: 60 + keyRoot.rawValue + 6, letter: letter), abs(pitch.accidental) <= 1 else {
+            return keyRoot.advanced(by: 6).description
+        }
+        return SpelledPitch.letterNames[letter] + SpelledPitch.accidentalSymbol(pitch.accidental)
+    }
+}
+
+/// What Blues Buddy's fretboard shows: the dots, what each is, and any labels that replace a
+/// dot's note name.
+struct BluesFretboard: Equatable {
+
+    enum Mark: Equatable {
+        case root
+        /// A note of the scale (in Both: one the two pentatonics share).
+        case tone
+        /// In Both: only in the minor pentatonic (♭3, 4, ♭7), or only in the major (2, 3, 6).
+        case minorOnly, majorOnly
+        /// The blues scale's ♭5.
+        case blueNote
+    }
+
+    var marks: [FretboardPosition: Mark]
+    var labels: [FretboardPosition: String]
+    /// The root the dots are on, and whether to spell their names as in its minor key.
+    var root: Note
+    var spellsAsMinor: Bool
+    /// The frets the dots span.
+    var frets: ClosedRange<Int>
+    /// The frets to keep in view: the position's area and a fret either side, the same
+    /// whatever shows, so the neck doesn't slide about as the chords change.
+    var focus: ClosedRange<Int>
+
+    var roots: Set<FretboardPosition> { Set(marks.filter { $0.value == .root }.keys) }
+
+    /// Scale degrees by half steps above the root.
+    static let degreeNames: [Int: String] = [0: "1", 2: "2", 3: "♭3", 4: "3", 5: "4", 6: "♭5", 7: "5", 9: "6", 10: "♭7"]
+}
+
 // MARK: - Dice
 
 /// Blues Buddy's dice: the same seed, bar and layer always roll the same (SplitMix64). Each
@@ -216,7 +448,7 @@ struct BluesGroove: Codable, Equatable {
 struct BluesDice {
 
     enum Layer: UInt64 {
-        case bassLine = 1, bass, stabs, fill, turnaround
+        case bassLine = 1, bass, stabs, fill, turnaround, scale
     }
 
     private var state: UInt64
@@ -437,17 +669,34 @@ extension BluesGroove {
     /// first box (F3 to E4), so fills sit where that box is.
     var fillTonic: Int { 53 + ((keyRoot.rawValue - 5) % 12 + 12) % 12 }
 
-    /// The pentatonic a fill in bar `bar` is made from: the one showing while the I chord
-    /// plays, and the minor pentatonic over IV and V, where the major one's 3rd would clash.
-    func fillScale(forBar bar: Int) -> PentatonicQuality {
-        isMinor || form.degrees[index(ofBar: bar)] != 1 ? .minor : scale
+    /// The scale a fill in bar `bar` is made from. Following the chords, it's the one showing.
+    /// Otherwise it's the one showing while the I chord plays (one or the other of Both), and
+    /// over IV and V the minor pentatonic, where the major one's 3rd would clash. The blues
+    /// scale suits all three.
+    func fillScale(forBar bar: Int, seed: UInt64) -> ScaleChoice {
+        if followsChords { return shownScale(forBar: bar) }
+        var choice = ScaleChoice(root: keyRoot, rootName: tonicName, scale: .minor)
+        if scale == .blues {
+            choice.scale = .blues
+        } else if !isMinor && form.degrees[index(ofBar: bar)] == 1 {
+            switch scale {
+            case .major:
+                choice.scale = .major
+            case .both:
+                var dice = BluesDice(seed: seed, bar: bar, layer: .scale)
+                choice.scale = dice.chance(0.5) ? .major : .minor
+            case .minor, .blues:
+                break
+            }
+        }
+        return choice
     }
 
-    /// The notes fills are made from, low to high: `quality`'s pentatonic on the tonic, from a
-    /// 4th below `fillTonic` to a minor 10th above.
-    func fillPool(_ quality: PentatonicQuality) -> [Int] {
-        let steps: Set<Int> = quality.isMinor ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9]
-        return ((fillTonic - 5)...(fillTonic + 15)).filter { steps.contains((($0 - fillTonic) % 12 + 12) % 12) }
+    /// The notes fills are made from, low to high: the scale's notes from a 4th below
+    /// `fillTonic` to a minor 10th above (the same part of the neck whatever its root).
+    func fillPool(_ choice: ScaleChoice) -> [Int] {
+        let steps = choice.scale.steps
+        return ((fillTonic - 5)...(fillTonic + 15)).filter { steps.contains((($0 - choice.root.rawValue) % 12 + 12) % 12) }
     }
 
     private struct Fill {
@@ -499,7 +748,7 @@ extension BluesGroove {
 
         // What: it ends on a note of the chord (its root likeliest), and walks there through
         // the pentatonic, mostly by step and mostly from above.
-        let pool = fillPool(fillScale(forBar: bar))
+        let pool = fillPool(fillScale(forBar: bar, seed: seed))
         let chordRoot = chord.root.note.rawValue
         let targets: [(Int, Double)] = pool.indices.compactMap { i in
             let pitchClass = pool[i] % 12
@@ -668,7 +917,7 @@ enum SavedBluesGrooves {
         let feel: BluesFeel = solo.style == .shuffle ? .shuffle : solo.style == .ballad ? .slow : .straight
         return BluesGroove(keyRoot: solo.keyRoot, form: solo.isMinor ? .minorTwelveBar : .quickChange, feel: feel,
                            bpm: min(max(solo.bpm, BluesGroove.tempoRange.lowerBound), BluesGroove.tempoRange.upperBound),
-                           scale: solo.scale, savedID: solo.savedID)
+                           scale: solo.scale.isMinor ? .minor : .major, savedID: solo.savedID)
     }
 
     /// Takes over 12-bar grooves saved in Solo Buddy, keeping their names, dates and ids.

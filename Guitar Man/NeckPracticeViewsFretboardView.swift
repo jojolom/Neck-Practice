@@ -50,6 +50,13 @@ struct FretboardView: View {
     /// scale degree like "♭3").
     var customLabels: [FretboardPosition: String] = [:]
 
+    /// Colours that replace indigo (or the root's orange) on specific highlighted dots.
+    var customColors: [FretboardPosition: Color] = [:]
+
+    /// The frets to scroll into view, instead of the highlighted shape's own: for a shape that
+    /// changes while it's watched, so the neck stays put.
+    var focusFrets: ClosedRange<Int>? = nil
+
     /// Returns the proper enharmonic spelling for `note` given the current
     /// key context, or the chromatic default if there's no context.
     private func label(for note: Note) -> String {
@@ -82,6 +89,7 @@ struct FretboardView: View {
     /// The frets the highlighted shape spans (open strings sit in the fixed column, so they
     /// don't count unless the shape is nothing but open strings).
     private var shapeSpan: ClosedRange<Int> {
+        if let focusFrets { return max(focusFrets.lowerBound, 1)...max(focusFrets.upperBound, 1) }
         let all = allHighlighted.map(\.fret)
         let fretted = all.filter { $0 > 0 }
         let frets = fretted.isEmpty ? all : fretted
@@ -329,6 +337,7 @@ struct FretboardView: View {
             if answerResult == true  { return .green }
             if answerResult == false { return .red   }
         }
+        if let color = customColors[pos] { return color }
         return isMultiRoot ? .orange : Color(.systemIndigo)
     }
 

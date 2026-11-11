@@ -8,8 +8,10 @@
 //  and never the same twice (every Play is a new take: see BluesGroove). The Grooves button at
 //  the top names the groove playing and opens the Grooves sheet (save it, pick one of yours or
 //  a preset). Under it: the chord you're on and the next one, the form's bars with the one
-//  playing lit, the pentatonic box to solo with, and the settings. The groove playing is
-//  remembered, and saved grooves are kept (SavedBluesGrooves).
+//  playing lit, what to solo with (the minor or major pentatonic, the blues scale, or both
+//  pentatonics at once, in one part of the neck; or Follow the Chords, which changes it bar by
+//  bar), and the settings. The groove playing is remembered, and saved grooves are kept
+//  (SavedBluesGrooves).
 //
 
 import SwiftUI
@@ -32,7 +34,7 @@ struct BluesBuddyView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     grooveHeader
-                    // What you need while soloing: the chord you're on, where you are, and the box.
+                    // What you need while soloing: the chord you're on, where you are, and the scale.
                     nowPlaying
                     formChart
                     scaleCard
@@ -212,55 +214,81 @@ struct BluesBuddyView: View {
 
     // MARK: - Scale
 
-    private var box: PentatonicQuestion {
-        let index = min(max(position, 1), allPentatonicShapes.count) - 1
-        return PentatonicQuestion(shape: allPentatonicShapes[index], quality: groove.scale, key: groove.keyRoot)
+    /// The bar the fretboard shows: the one playing, or the first while stopped.
+    private var shownBar: Int {
+        track.isPlaying && !track.isCountingIn ? track.bar ?? 0 : 0
     }
 
-    /// The neck is drawn to the highest fret any box in this key reaches, so it keeps one
-    /// width: changing position then scrolls the new box fully into view.
+    /// The neck is drawn to the highest fret any position's area reaches (and the fret or two
+    /// a neighbouring box adds), so it keeps one width whatever shows.
     private var neckFrets: Int {
-        let highest = allPentatonicShapes.map {
-            PentatonicQuestion(shape: $0, quality: groove.scale, key: groove.keyRoot).maxFret
-        }.max() ?? 12
+        let highest = (1...allPentatonicShapes.count).map { groove.area(position: $0).maxFret + 2 }.max() ?? 12
         return max(highest, 12)
     }
 
+    /// The dots that aren't the usual indigo (or the root's orange).
+    private func colors(for board: BluesFretboard) -> [FretboardPosition: Color] {
+        var colors: [FretboardPosition: Color] = [:]
+        for (dot, mark) in board.marks {
+            switch mark {
+            case .root, .tone: break
+            case .minorOnly:   colors[dot] = .blue
+            case .majorOnly:   colors[dot] = .green
+            case .blueNote:    colors[dot] = .teal
+            }
+        }
+        return colors
+    }
+
+    private func legend(for shown: BluesGroove.ScaleChoice) -> String {
+        switch shown.scale {
+        case .minor, .major:
+            return "Orange dots are the root, \(shown.rootName)."
+        case .blues:
+            return "Orange dots are the root, \(shown.rootName). Teal dots are the ♭5, the blue note: pass through it on the way to the 4th or the 5th."
+        case .both:
+            return "The numbers are scale degrees, 1 being \(shown.rootName). Blue dots are in the minor pentatonic only, green in the major only. The ♭3 and the 3 sit a fret apart: that's the switch."
+        }
+    }
+
     private var scaleCard: some View {
-        let box = self.box
+        let shown = groove.shownScale(forBar: shownBar)
+        let board = groove.fretboard(position: position, bar: shownBar)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Solo with")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(groove.scaleName)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                }
-                Spacer()
-                // A minor blues wants the minor pentatonic: the major one's 3rd fights its chords.
-                if !groove.isMinor {
-                    Picker("Pentatonic", selection: $groove.scale) {
-                        Text("Minor").tag(PentatonicQuality.minor)
-                        Text("Major").tag(PentatonicQuality.major)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 150)
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(groove.followsChords ? "Following the chords" : "Solo with")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(shown.name)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
             }
             .padding(.horizontal, 20)
+
+            // A minor blues wants the minor pentatonic or the blues scale: the major
+            // pentatonic's 3rd fights its chords.
+            Picker("Scale", selection: $groove.scale) {
+                ForEach(groove.isMinor ? BluesScale.forMinorBlues : BluesScale.allCases) { scale in
+                    Text(scale.displayName).tag(scale)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(groove.followsChords)
+            .padding(.horizontal, 20)
+
+            followControls
+                .padding(.horizontal, 20)
 
             HStack {
                 // The frets here too: the numbers under the neck can be out of sight.
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Position")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    Text("Frets \(box.minFret)–\(box.maxFret)")
+                    Text("Frets \(board.frets.lowerBound)–\(board.frets.upperBound)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                         .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.2), value: box.minFret)
+                        .animation(.easeInOut(duration: 0.2), value: board.frets.lowerBound)
                 }
                 Spacer()
                 Picker("Position", selection: $position) {
@@ -270,25 +298,64 @@ struct BluesBuddyView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 210)
-                .accessibilityLabel("Pentatonic box position")
+                .accessibilityLabel("Position on the neck")
             }
             .padding(.horizontal, 20)
 
             FretboardView(
-                highlightedPositions: Set(box.shapePositions),
-                rootPositions: box.effectiveRootPositions,
+                highlightedPositions: Set(board.marks.keys),
+                rootPositions: board.roots,
                 maxFret: neckFrets,
                 showHighlightedLabels: true,
-                keyContext: FretboardView.KeyContext(root: box.effectiveRootNote, isMinor: groove.scale.isMinor)
+                keyContext: FretboardView.KeyContext(root: board.root, isMinor: board.spellsAsMinor),
+                customLabels: board.labels,
+                customColors: colors(for: board),
+                focusFrets: board.focus
             )
             .frame(height: 280)
             .padding(.horizontal, 8)
             .animation(.easeInOut(duration: 0.3), value: position)
 
-            Text("Orange dots are the root, \(groove.tonicName).")
+            Text(legend(for: shown))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 20)
+        }
+    }
+
+    /// Follow the Chords, and the rule it follows by (a minor blues has only the one).
+    private var followControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $groove.followsChords) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Follow the Chords")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text("The fretboard changes scale as the chords go by.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if groove.followsChords {
+                if !groove.isMinor {
+                    HStack {
+                        Text("Rule").font(.system(size: 15, weight: .semibold, design: .rounded))
+                        Spacer()
+                        Picker("Rule", selection: $groove.followRule) {
+                            ForEach(BluesFollowRule.allCases) { rule in
+                                Text(rule.displayName).tag(rule)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+                Text(groove.form == .vamp
+                     ? "On one chord there's nothing to follow: pick a form with changes."
+                     : groove.activeFollowRule.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -351,7 +418,7 @@ struct BluesBuddyView: View {
                     get: { groove.form },
                     set: { form in
                         groove.form = form
-                        if form.isMinor { groove.scale = .minor }
+                        if form.isMinor && !BluesScale.forMinorBlues.contains(groove.scale) { groove.scale = .minor }
                     }
                 )) {
                     ForEach(BluesForm.allCases) { form in

@@ -8,8 +8,11 @@
 //  notes aside), the chords on the chord, fills in the pentatonic and ending on a chord note,
 //  no chord inside a fill, not too many notes ringing. A switch that's off plays nothing (and
 //  doesn't change the others), the same seed gives the same bar, different seeds give different
-//  takes, fills come at the ends of lines, the turnaround lands on the 5th; grooves save and
-//  load; and Solo Buddy's old 12-bar grooves move over, once.
+//  takes, fills come at the ends of lines, the turnaround lands on the 5th. What shows: each
+//  scale's name and notes, both follow rules bar by bar, and the fretboard in every key and
+//  position (the right notes, two a string, in one part of the neck whatever shows, the ♭5
+//  and the two 3rds marked). Grooves save and load; and Solo Buddy's old 12-bar grooves move
+//  over, once.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/blues-buddy-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsChord.swift" "Guitar Man/NeckPracticeModelsChordVoicing.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsSoloBuddy.swift" "Guitar Man/NeckPracticeModelsBluesBuddy.swift" scripts/blues-buddy-check.swift && /tmp/blues-buddy-check
@@ -31,6 +34,8 @@ struct BluesBuddyCheck {
 
     static func main() {
         checkForms()
+        checkScales()
+        checkFretboard()
         checkEveryBar()
         checkSwitches()
         checkDice()
@@ -57,11 +62,14 @@ struct BluesBuddyCheck {
         let g = BluesGroove(keyRoot: .a, form: .twelveBar)
         check(g.symbol(forBar: 12) == g.symbol(forBar: 0) && g.symbol(forBar: 23) == g.symbol(forBar: 11), "the form comes round")
         check(g.keyName == "A" && BluesGroove(form: .minorTwelveBar).keyName == "A Minor", "key names")
-        check(g.scaleName == "A minor pentatonic", "scale name \(g.scaleName)")
-        check(BluesGroove(form: .minorTwelveBar, scale: .major).scale == .minor, "a minor blues shows the minor pentatonic")
         check(g.fillTonic == 57 && BluesGroove(keyRoot: .e).fillTonic == 64 && BluesGroove(keyRoot: .f).fillTonic == 53, "fill register")
-        check(g.fillPool(.minor) == [52, 55, 57, 60, 62, 64, 67, 69, 72], "A minor pentatonic pool \(g.fillPool(.minor))")
-        check(g.fillPool(.major) == [52, 54, 57, 59, 61, 64, 66, 69, 71], "A major pentatonic pool \(g.fillPool(.major))")
+        func pool(_ root: Note, _ scale: BluesScale) -> [Int] {
+            g.fillPool(BluesGroove.ScaleChoice(root: root, rootName: "", scale: scale))
+        }
+        check(pool(.a, .minor) == [52, 55, 57, 60, 62, 64, 67, 69, 72], "A minor pentatonic pool \(pool(.a, .minor))")
+        check(pool(.a, .major) == [52, 54, 57, 59, 61, 64, 66, 69, 71], "A major pentatonic pool \(pool(.a, .major))")
+        check(pool(.a, .blues) == [52, 55, 57, 60, 62, 63, 64, 67, 69, 72], "A blues scale pool \(pool(.a, .blues))")
+        check(pool(.d, .major) == [52, 54, 57, 59, 62, 64, 66, 69, 71], "D major pentatonic pool, in the same part of the neck \(pool(.d, .major))")
         for feel in BluesFeel.allCases {
             let slots = feel.slots
             check(slots == slots.sorted() && slots.first == 0 && (slots.last ?? 4) < 4 && slots.count % 4 == 0, "\(feel): slots \(slots)")
@@ -69,7 +77,149 @@ struct BluesBuddyCheck {
         print("ok   forms: 12-bar, quick change, minor, 8-bar, vamp; pools and slots")
     }
 
+    // MARK: What shows
+
+    static func checkScales() {
+        let g = BluesGroove(keyRoot: .a, form: .twelveBar)
+        check(g.shownScale(forBar: 0).name == "A minor pentatonic", "scale name \(g.shownScale(forBar: 0).name)")
+        let names = BluesScale.allCases.map { BluesGroove(keyRoot: .aSharp, scale: $0).shownScale(forBar: 4).name }
+        check(names == ["B♭ minor pentatonic", "B♭ major pentatonic", "B♭ blues scale", "B♭ minor + major pentatonic"], "names \(names)")
+        check(BluesScale.both.steps == BluesScale.minor.steps.union(BluesScale.major.steps), "Both is the two pentatonics")
+        check(BluesScale.blues.steps == BluesScale.minor.steps.union([6]), "the blues scale is the minor pentatonic and the ♭5")
+        // A minor blues keeps to minor and blues.
+        check(BluesGroove(form: .minorTwelveBar, scale: .major).scale == .minor && BluesGroove(form: .minorTwelveBar, scale: .both).scale == .minor
+              && BluesGroove(form: .minorTwelveBar, scale: .blues).scale == .blues, "a minor blues shows minor or blues")
+        let sparse = try? JSONDecoder().decode(BluesGroove.self, from: Data(#"{"form":"minorTwelveBar","scale":"both"}"#.utf8))
+        check(sparse?.scale == .minor, "and loads that way")
+        // A groove saved before the four scales (the scale was a PentatonicQuality) still loads.
+        let old = try? JSONDecoder().decode(BluesGroove.self, from: Data(#"{"form":"eightBar","scale":{"major":{}}}"#.utf8))
+        check(old == BluesGroove(form: .eightBar), "an old scale loads as minor: \(String(describing: old))")
+
+        // Not following: the scale picked, every bar.
+        for scale in BluesScale.allCases {
+            let fixed = BluesGroove(keyRoot: .a, form: .twelveBar, scale: scale)
+            check((0..<12).allSatisfy { fixed.shownScale(forBar: $0) == BluesGroove.ScaleChoice(root: .a, rootName: "A", scale: scale) }, "\(scale) every bar")
+        }
+        // Following, on the key's root: major over I, minor over IV and V.
+        let tonic = BluesGroove(keyRoot: .a, form: .twelveBar, scale: .blues, followsChords: true, followRule: .tonic)
+        let shown = (0..<12).map { tonic.shownScale(forBar: $0) }
+        check(shown.allSatisfy { $0.root == .a && $0.rootName == "A" }, "the tonic rule stays on the root")
+        check(shown.map(\.scale) == [.major, .major, .major, .major, .minor, .minor, .major, .major, .minor, .minor, .major, .minor], "major on I, minor on IV and V: \(shown.map(\.scale))")
+        check(tonic.shownScale(forBar: 16) == tonic.shownScale(forBar: 4), "and round again")
+        // Following each chord's own.
+        let own = BluesGroove(keyRoot: .a, form: .eightBar, followsChords: true, followRule: .chord)
+        check((0..<8).map { own.shownScale(forBar: $0).name } == ["A", "E", "D", "D", "A", "E", "A", "E"].map { "\($0) major pentatonic" }, "each chord's own: \((0..<8).map { own.shownScale(forBar: $0).name })")
+        // A minor blues follows each chord's own whichever rule is set: i and iv minor, V major.
+        for rule in BluesFollowRule.allCases {
+            let minor = BluesGroove(keyRoot: .a, form: .minorTwelveBar, followsChords: true, followRule: rule)
+            check(minor.activeFollowRule == .chord, "a minor blues follows each chord's own")
+            check((0..<12).map { minor.shownScale(forBar: $0).name } == ["A minor", "D minor", "A minor", "A minor", "D minor", "D minor", "A minor", "A minor", "E major", "D minor", "A minor", "E major"].map { "\($0) pentatonic" },
+                  "minor blues, \(rule): \((0..<12).map { minor.shownScale(forBar: $0).name })")
+        }
+        check(BluesGroove(keyRoot: .a).flatFifthName == "E♭" && BluesGroove(keyRoot: .e).flatFifthName == "B♭" && BluesGroove(keyRoot: .b).flatFifthName == "F"
+              && BluesGroove(keyRoot: .a, form: .minorTwelveBar).flatFifthName == "E♭", "the ♭5 spelled")
+        // Where it would take a double flat (A𝄫 in D♭), the plain name.
+        check(BluesGroove(keyRoot: .cSharp).flatFifthName == "G" && BluesGroove(keyRoot: .gSharp).flatFifthName == "D", "the ♭5 in D♭ and A♭")
+        for form in [BluesForm.twelveBar, .minorTwelveBar] {
+            for root in Note.allCases {
+                let name = BluesGroove(keyRoot: root, form: form).flatFifthName
+                check((1...2).contains(name.count) && !name.contains("#"), "the ♭5 in \(BluesGroove(keyRoot: root, form: form).keyName): \(name)")
+            }
+        }
+        print("ok   scales: names, a minor blues, both follow rules")
+    }
+
+    static func checkFretboard() {
+        var boards = 0
+        var differ = 0
+        for root in Note.allCases {
+            for form in [BluesForm.twelveBar, .minorTwelveBar] {
+                for position in 1...5 {
+                    let plain = BluesGroove(keyRoot: root, form: form)
+                    let area = plain.area(position: position)
+                    let label = "\(plain.keyName) position \(position)"
+                    check(area.minFret >= 1 && area.maxFret <= 22, "\(label): area frets \(area.minFret)–\(area.maxFret)")
+                    // The area is the minor box Solo Buddy shows at that position.
+                    check(Set(area.shapePositions) == Set(PentatonicQuestion(shape: allPentatonicShapes[position - 1], quality: .minor, key: root).shapePositions), "\(label): the area")
+
+                    for showing in showings {
+                        var g = plain
+                        g.scale = form.isMinor && !BluesScale.forMinorBlues.contains(showing.scale) ? .minor : showing.scale
+                        g.followsChords = showing.rule != nil
+                        g.followRule = showing.rule ?? .tonic
+                        for bar in 0..<g.barCount {
+                            boards += 1
+                            let board = g.fretboard(position: position, bar: bar)
+                            let choice = g.shownScale(forBar: bar)
+                            let here = "\(label), \(showing), bar \(bar + 1) (\(choice.name))"
+                            let steps = { (p: FretboardPosition) in ((p.note.rawValue - choice.root.rawValue) % 12 + 12) % 12 }
+                            check(board.root == choice.root && board.spellsAsMinor == (choice.scale != .major), "\(here): root and spelling")
+                            // The right notes, all of them, and nothing else.
+                            check(board.marks.keys.allSatisfy { choice.scale.steps.contains(steps($0)) }, "\(here): a dot off the scale")
+                            check(Set(board.marks.keys.map(steps)) == choice.scale.steps, "\(here): steps \(Set(board.marks.keys.map(steps)).sorted())")
+                            // Roots are the roots.
+                            check(board.roots == Set(board.marks.keys.filter { steps($0) == 0 }) && !board.roots.isEmpty, "\(here): roots")
+                            // On the neck, in the position's part of it, wherever the scale's root is.
+                            let frets = board.marks.keys.map(\.fret)
+                            check(board.frets == (frets.min() ?? 0)...(frets.max() ?? 0), "\(here): frets \(board.frets)")
+                            check(board.frets.lowerBound >= 1 && board.frets.upperBound <= 24, "\(here): on the neck \(board.frets)")
+                            check(board.focus == max(area.minFret - 1, 1)...(area.maxFret + 1), "\(here): focus \(board.focus)")
+                            check(board.frets.lowerBound >= board.focus.lowerBound - 1 && board.frets.upperBound <= board.focus.upperBound + 1,
+                                  "\(here): frets \(board.frets) stray from \(board.focus)")
+                            check(board.frets.count <= 6, "\(here): a stretch of \(board.frets.count) frets")
+                            // Every string is used.
+                            let perString = (0..<6).map { string in board.marks.keys.filter { $0.stringIndex == string }.count }
+
+                            switch choice.scale {
+                            case .minor, .major:
+                                check(perString == [2, 2, 2, 2, 2, 2], "\(here): two notes a string \(perString)")
+                                check(board.labels.isEmpty, "\(here): no labels")
+                                check(board.marks.values.allSatisfy { $0 == .root || $0 == .tone }, "\(here): plain dots")
+                                if choice.root == root && choice.scale == .minor {
+                                    check(Set(board.marks.keys) == Set(area.shapePositions), "\(here): the minor pentatonic is the area's box")
+                                }
+                            case .blues:
+                                let blue = board.marks.filter { $0.value == .blueNote }.keys
+                                check(!blue.isEmpty && blue.allSatisfy { steps($0) == 6 }, "\(here): \(blue.count) blue notes")
+                                check(Set(board.marks.keys).subtracting(blue) == Set(area.shapePositions), "\(here): the minor box under the blue notes")
+                                check(blue.allSatisfy { (area.minFret...area.maxFret).contains($0.fret) }, "\(here): blue notes among the box's frets")
+                                check(Set(board.labels.keys) == Set(blue) && board.labels.values.allSatisfy { $0 == g.flatFifthName }, "\(here): blue notes named")
+                            case .both:
+                                check(perString.allSatisfy { (3...4).contains($0) }, "\(here): three or four notes a string \(perString)")
+                                check(Set(area.shapePositions).isSubset(of: Set(board.marks.keys)), "\(here): the minor box is there")
+                                for (dot, mark) in board.marks {
+                                    let step = steps(dot)
+                                    let expected: BluesFretboard.Mark = step == 0 ? .root : [3, 5, 10].contains(step) ? .minorOnly : [2, 4, 9].contains(step) ? .majorOnly : .tone
+                                    check(mark == expected, "\(here): step \(step) marked \(mark)")
+                                    check(board.labels[dot] == ["1", "", "2", "♭3", "3", "4", "", "5", "", "6", "♭7", ""][step], "\(here): step \(step) labelled \(board.labels[dot] ?? "nothing")")
+                                }
+                                // The two 3rds, a fret apart on some string.
+                                check(board.marks.keys.contains { dot in
+                                    steps(dot) == 3 && board.marks[FretboardPosition(stringIndex: dot.stringIndex, fret: dot.fret + 1)] == .majorOnly
+                                }, "\(here): ♭3 and 3 side by side")
+                            }
+                            if bar > 0, board != g.fretboard(position: position, bar: bar - 1) { differ += 1 }
+                        }
+                    }
+                }
+            }
+        }
+        // Switching Minor to Major keeps the hand where it is: A at the 5th fret is frets 5–8 and 4–7.
+        let a = BluesGroove(keyRoot: .a)
+        var major = a
+        major.scale = .major
+        check(a.fretboard(position: 1, bar: 0).frets == 5...8 && major.fretboard(position: 1, bar: 0).frets == 4...7,
+              "A, position 1: minor \(a.fretboard(position: 1, bar: 0).frets), major \(major.fretboard(position: 1, bar: 0).frets)")
+        check(differ > 500, "following the chords changes the fretboard (\(differ) changes)")
+        print("ok   fretboard: \(boards) boards in every key, position and showing; \(differ) changes while following")
+    }
+
     // MARK: Every bar
+
+    /// What the fretboard shows: each scale, and following the chords by each rule.
+    static let showings: [(scale: BluesScale, rule: BluesFollowRule?)] = [
+        (.minor, nil), (.major, nil), (.blues, nil), (.both, nil), (.minor, .tonic), (.minor, .chord),
+    ]
 
     /// Every mix of the three switches.
     static let switches: [(bass: Bool, stabs: Bool, fills: Bool)] = [
@@ -84,14 +234,15 @@ struct BluesBuddyCheck {
             for feel in BluesFeel.allCases {
                 for root in Note.allCases {
                     for (s, mix) in switches.enumerated() {
-                        for scale in [PentatonicQuality.minor, .major] {
+                        for (v, showing) in showings.enumerated() {
                             let g = BluesGroove(keyRoot: root, form: form, feel: feel, bassPicking: mix.bass,
-                                                chordStabs: mix.stabs, fills: mix.fills, scale: scale)
-                            let seed = UInt64(bars) &* 7919 &+ UInt64(s)
+                                                chordStabs: mix.stabs, fills: mix.fills, scale: showing.scale,
+                                                followsChords: showing.rule != nil, followRule: showing.rule ?? .tonic)
+                            let seed = UInt64(bars) &* 7919 &+ UInt64(s) &+ UInt64(v) &* 31
                             for bar in 0..<(g.barCount * 3) {
                                 let chord = g.chord(forBar: bar)
                                 let played = g.bar(bar, seed: seed)
-                                let label = "\(form) \(feel) in \(g.keyName), switches \(mix), bar \(bar + 1) (\(chord.name))"
+                                let label = "\(form) \(feel) in \(g.keyName), switches \(mix), showing \(showing), bar \(bar + 1) (\(chord.name))"
                                 bars += 1
                                 notes += played.hits.count
                                 check(played.hits == g.hits(forBar: bar, seed: seed), "\(label): hits are the bar's layers")
@@ -176,26 +327,40 @@ struct BluesBuddyCheck {
             return
         }
 
-        // A fill: in the bar's pentatonic (the curl's major 3rd aside), starting where its span
-        // does and ending on a note of the chord.
-        let scale = g.fillScale(forBar: bar)
-        let pool = Set(g.fillPool(scale))
+        // A fill: in the bar's scale (the curl's major 3rd aside), starting where its span does
+        // and ending on a note of the chord. The scale, worked out here from the settings:
         let chordRoot = chord.root.note.rawValue
-        let majorThird = (chordRoot + 4) % 12
-        for (i, hit) in fill.enumerated() {
-            let isCurl = hit.midi % 12 == majorThird && i > 0 && fill[i - 1].midi == hit.midi - 1 && fill[i - 1].beats <= 0.2
-            check(pool.contains(hit.midi) || isCurl, "\(label): fill \(hit.midi) isn't in the \(scale) pentatonic")
+        let onTonicChord = g.form.degrees[g.index(ofBar: bar)] == 1
+        let minorSteps: Set<Int> = [0, 3, 5, 7, 10], majorSteps: Set<Int> = [0, 2, 4, 7, 9]
+        let scaleRoot: Int
+        var allowed: [Set<Int>]   // any one of these, for the whole fill
+        if g.followsChords && (g.isMinor || g.followRule == .chord) {
+            scaleRoot = chordRoot
+            allowed = [chord.pitchClasses.contains((chordRoot + 3) % 12) ? minorSteps : majorSteps]
+        } else if g.followsChords {
+            scaleRoot = g.keyRoot.rawValue
+            allowed = [onTonicChord ? majorSteps : minorSteps]
+        } else {
+            scaleRoot = g.keyRoot.rawValue
+            switch g.scale {
+            case .blues: allowed = [minorSteps.union([6])]
+            case .major: allowed = [onTonicChord && !g.isMinor ? majorSteps : minorSteps]
+            case .both:  allowed = onTonicChord && !g.isMinor ? [minorSteps, majorSteps] : [minorSteps]
+            case .minor: allowed = [minorSteps]
+            }
         }
+        let majorThird = (chordRoot + 4) % 12
+        let plain = fill.enumerated().filter { i, hit in
+            !(hit.midi % 12 == majorThird && i > 0 && fill[i - 1].midi == hit.midi - 1 && fill[i - 1].beats <= 0.2)
+        }.map { (($0.element.midi - scaleRoot) % 12 + 12) % 12 }
+        check(allowed.contains { steps in plain.allSatisfy(steps.contains) }, "\(label): fill steps \(plain) aren't in one of \(allowed.map { $0.sorted() })")
+        let scale = g.fillScale(forBar: bar, seed: seed)
+        check(scale.scale != .both && Set(plain).isSubset(of: scale.scale.steps) && scale.root.rawValue == scaleRoot, "\(label): the fill's scale is \(scale)")
         check(abs((fill.first?.beat ?? -1) - span.lowerBound) < 0.001, "\(label): the fill starts at \(span.lowerBound)")
         check(fill.count >= 2, "\(label): a fill of \(fill.count)")
         if let last = fill.last {
             check(chord.pitchClasses.contains(last.midi % 12), "\(label): the fill ends on \(last.midi), not in \(chord.name)")
             check(last.beats >= 0.3, "\(label): the last note rings")
-        }
-        if g.isMinor || g.form.degrees[g.index(ofBar: bar)] != 1 {
-            check(scale == .minor, "\(label): minor pentatonic off the I chord")
-        } else {
-            check(scale == g.scale, "\(label): the pentatonic showing on the I chord")
         }
     }
 

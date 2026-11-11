@@ -36,6 +36,21 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.6",
+            released: "November 2026",
+            releasedOn: DateComponents(year: 2026, month: 11, day: 20),
+            items: [
+                ChangelogItem(symbol: "music.mic", title: "Blues Buddy",
+                              detail: "A blues partner to solo over. It picks a bass line, drops in a chord or a triad here and there and throws in pentatonic fills, and never plays the same thing twice. Switch any of the three off, and choose the 12-bar, quick-change, minor or 8-bar blues, or just one chord, as a shuffle, a slow blues or straight."),
+                ChangelogItem(symbol: "arrow.left.arrow.right", title: "Minor, major, blues or both",
+                              detail: "Blues Buddy's fretboard shows the minor pentatonic, the major one, the blues scale, or both pentatonics at once, all in the same part of the neck, so you see what changes under your fingers when you switch. In Both, every dot is a scale degree: the ♭3 and the 3 sit a fret apart."),
+                ChangelogItem(symbol: "arrow.triangle.2.circlepath", title: "Follow the Chords",
+                              detail: "Turn it on and Blues Buddy's fretboard changes scale as the chords go by: the major pentatonic on the I chord and the minor on IV and V, or each chord's own pentatonic."),
+                ChangelogItem(symbol: "arrow.right.circle", title: "The blues has moved",
+                              detail: "Solo Buddy's 12-bar blues and its blues grooves now live in Blues Buddy. Any 12-bar groove you saved has moved there, with its name."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.5",
             released: "October 2026",
             releasedOn: DateComponents(year: 2026, month: 10, day: 30),
