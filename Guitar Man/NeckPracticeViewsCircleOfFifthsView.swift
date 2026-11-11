@@ -53,8 +53,8 @@ private let allKeys: [CoFKey] = [
 
 struct CircleOfFifthsView: View {
 
-    @State private var selectedIndex: Int? = nil
-    @State private var selectedIsMajor: Bool = true
+    @SavedSetting("reference.circle.index") private var selectedIndex: Int? = nil
+    @SavedSetting("reference.circle.isMajor") private var selectedIsMajor: Bool = true
     @Environment(AudioSettings.self) private var audioSettings
 
     var body: some View {

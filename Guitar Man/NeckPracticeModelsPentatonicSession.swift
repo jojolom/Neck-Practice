@@ -86,6 +86,12 @@ final class PentatonicSession {
         drawNext()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let q = currentQuestion else { return true }
+        return (qualityFilter == nil || q.quality == qualityFilter) && validRoots(for: q.shape).contains(q.rootNote)
+    }
+
     // MARK: - Private
 
     private func drawNext() {

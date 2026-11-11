@@ -13,10 +13,14 @@ struct RomanNumeralView: View {
 
     @State private var session: RomanNumeralSession
 
-    init(override: RomanNumeralStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((RomanNumeralStepConfig) -> Void)?
+
+    init(override: RomanNumeralStepConfig? = nil, onStepChange: ((RomanNumeralStepConfig) -> Void)? = nil) {
         let session = RomanNumeralSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("romanNumeral"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
     @State private var answerResult: Bool? = nil
     @State private var isLocked = false
@@ -97,6 +101,8 @@ struct RomanNumeralView: View {
             .sheet(isPresented: $showSettings) {
                 RomanNumeralSettingsView(session: session)
             }
+            .savesSettings(session.settings, game: "romanNumeral", step: onStepChange) { settingsChanged() }
+            .onChange(of: session.choiceCount) { if !isLocked { choices = session.generateChoices() } }
             .onAppear {
                 session.start()
                 choices = session.generateChoices()
@@ -212,6 +218,13 @@ struct RomanNumeralView: View {
         nextGate.after(correct ? 1.0 : 2.0, correct: correct) {
             advanceToNext()
         }
+    }
+
+    /// A new question only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        guard !session.currentFitsSettings else { return }
+        nextGate.cancel()
+        advanceToNext()
     }
 
     private func advanceToNext() {

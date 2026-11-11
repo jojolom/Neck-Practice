@@ -13,10 +13,14 @@ struct ScaleStudyView: View {
     @State private var metronome = Metronome()
     @State private var showingSettings = false
 
-    init(override: ScaleStudyStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((ScaleStudyStepConfig) -> Void)?
+
+    init(override: ScaleStudyStepConfig? = nil, onStepChange: ((ScaleStudyStepConfig) -> Void)? = nil) {
         let session = ScaleStudySession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("scaleStudy"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
 
     var body: some View {
@@ -43,6 +47,12 @@ struct ScaleStudyView: View {
             .sheet(isPresented: $showingSettings) {
                 ScaleStudySettingsView(session: session)
             }
+            .savesSettings(session.settings, game: "scaleStudy", step: onStepChange) {
+                session.applySettingsNow()
+            }
+            // The metronome follows straight away, without stopping.
+            .onChange(of: session.bpm) { metronome.bpm = session.bpm }
+            .onChange(of: clicksPerBeat) { metronome.subdivisions = clicksPerBeat }
             .onDisappear { metronome.stop() }
             .onChange(of: session.phase) { _, newPhase in
                 if newPhase == .practice {
@@ -359,9 +369,13 @@ struct ScaleStudyView: View {
 
     // MARK: - Metronome Control
 
+    private var clicksPerBeat: Int {
+        session.clickSubdivisions ? session.rhythm.notesPerBeat : 1
+    }
+
     private func startMetronome() {
         metronome.bpm = session.bpm
-        metronome.subdivisions = session.clickSubdivisions ? session.rhythm.notesPerBeat : 1
+        metronome.subdivisions = clicksPerBeat
         metronome.start()
     }
 }

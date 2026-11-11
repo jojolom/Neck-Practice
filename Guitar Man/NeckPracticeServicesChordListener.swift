@@ -119,6 +119,8 @@ final class ChordListener {
         signalLevel = 0
     }
 
+    /// Listens again after iOS stopped the engine. Not in the background: the app becoming
+    /// active again restarts it.
     private func restartEngine() {
         guard isListening, UIApplication.shared.applicationState != .background else { return }
         stopEngine()
@@ -141,8 +143,9 @@ final class ChordListener {
             AudioSessionSetup.observe(UIApplication.didEnterBackgroundNotification) { [weak self] _ in
                 self?.stopEngine()
             },
-            AudioSessionSetup.observe(UIApplication.willEnterForegroundNotification) { [weak self] _ in
-                self?.restartEngine()
+            AudioSessionSetup.observe(UIApplication.didBecomeActiveNotification) { [weak self] _ in
+                guard let self, !self.isTapInstalled else { return }
+                self.restartEngine()
             },
         ]
     }

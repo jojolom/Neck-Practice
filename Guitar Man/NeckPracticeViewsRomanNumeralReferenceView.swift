@@ -10,8 +10,8 @@ import SwiftUI
 
 struct RomanNumeralReferenceView: View {
 
-    @State private var rootNote: Note = .c
-    @State private var scale: DiatonicScale = .major
+    @SavedSetting("reference.roman.root") private var rootNote: Note = .c
+    @SavedSetting("reference.roman.scale") private var scale: DiatonicScale = .major
 
     private var numerals: [String] { scale.romanNumerals }
     private var qualities: [RNChordQuality] { scale.chordQualities }

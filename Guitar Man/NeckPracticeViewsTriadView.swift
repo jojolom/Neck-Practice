@@ -25,10 +25,14 @@ struct TriadView: View {
 
     @State private var session: TriadSession
 
-    init(override: TriadStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((TriadStepConfig) -> Void)?
+
+    init(override: TriadStepConfig? = nil, onStepChange: ((TriadStepConfig) -> Void)? = nil) {
         let session = TriadSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("triad"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
     @State private var step: AnswerStep = .quality
     @State private var answerResult: Bool? = nil
@@ -141,24 +145,12 @@ struct TriadView: View {
             .sheet(isPresented: $showSettings) {
                 TriadSettingsView(session: session)
             }
+            .savesSettings(session.settings, game: "triad", step: onStepChange) { settingsChanged() }
             .onAppear {
                 session.start()
                 lockForNewQuestion()
             }
-            .onChange(of: session.currentQuestion?.shape.id) {
-                nextGate.cancel()
-                step               = .quality
-                answerResult       = nil
-                correctQuality     = nil
-                wrongQuality       = nil
-                correctInversion   = nil
-                wrongInversion     = nil
-                correctRoot        = nil
-                wrongRoot          = nil
-                showRootHint       = false
-                isLocked           = false
-                lockForNewQuestion()
-            }
+            .onChange(of: session.currentQuestion?.shape.id) { resetForNewQuestion() }
         }
     }
 
@@ -404,6 +396,30 @@ struct TriadView: View {
     }
 
     /// Plays the current triad and locks the buttons for a moment so it can be heard first.
+    private func resetForNewQuestion() {
+        nextGate.cancel()
+        step               = .quality
+        answerResult       = nil
+        correctQuality     = nil
+        wrongQuality       = nil
+        correctInversion   = nil
+        wrongInversion     = nil
+        correctRoot        = nil
+        wrongRoot          = nil
+        showRootHint       = false
+        isLocked           = false
+        lockForNewQuestion()
+    }
+
+    /// A new shape only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        guard !session.currentFitsSettings else { return }
+        let shown = session.currentQuestion?.shape.id
+        session.advance()
+        // The only shape left can come back at another fret, which onChange wouldn't notice.
+        if session.currentQuestion?.shape.id == shown { resetForNewQuestion() }
+    }
+
     private func lockForNewQuestion() {
         isNewQuestionLocked = true
         playCurrentTriad()

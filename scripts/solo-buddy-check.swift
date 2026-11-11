@@ -184,5 +184,35 @@ struct SoloBuddyCheck {
               "position in a bar")
         check(clock.position(at: 0, in: scheduled) == nil, "before the first bar: none")
         print("ok   bar clock: \(scheduled.count) bars in 30 s through a tempo change")
+
+        // A change restarts the bar you're in: same number, from where you say, then on as usual.
+        var restarted = BarClock(firstBarFrame: 50_000, firstIndex: 7)
+        let again = restarted.bars(dueBy: 50_000 + 2 * 96_000 + 1, framesPerBar: 96_000)
+        check(again.map(\.index) == [7, 8, 9] && again.map(\.frame) == [50_000, 146_000, 242_000],
+              "restarting a bar keeps its number and carries on from there")
+        check(restarted.position(at: 60_000, in: again)?.index == 7, "the restarted bar is the one sounding")
+
+        // What counts as a change you'd hear.
+        let groove = SoloPreset.all[0].groove
+        var scaleOnly = groove
+        scaleOnly.scale = groove.scale == .minor ? .major : .minor
+        scaleOnly.presetID = "another"
+        check(!scaleOnly.soundsDifferent(from: groove, inBars: [0, 1]), "a new scale or name isn't a change you'd hear")
+        var tempo = groove
+        tempo.bpm += 5
+        check(tempo.soundsDifferent(from: groove, inBars: []), "a new tempo is, in any bar")
+        var key = groove
+        key.keyRoot = groove.keyRoot == .a ? .e : .a
+        check(key.soundsDifferent(from: groove, inBars: [0]), "a new key is")
+        var waltz = groove
+        waltz.style = .waltz
+        check(waltz.soundsDifferent(from: groove, inBars: []), "a new meter is, in any bar")
+        var later = SoloGroove()
+        later.chords = [ChordSymbol(degree: 1), ChordSymbol(degree: 4), ChordSymbol(degree: 5)]
+        var changedLater = later
+        changedLater.chords[2] = ChordSymbol(degree: 6)
+        check(!changedLater.soundsDifferent(from: later, inBars: [0, 1]),
+              "changing a chord further along doesn't touch the bars you're hearing")
+        check(changedLater.soundsDifferent(from: later, inBars: [2]), "...and does once you're on it")
     }
 }

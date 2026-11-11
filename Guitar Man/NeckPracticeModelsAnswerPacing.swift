@@ -53,16 +53,24 @@ final class NextGate {
     private(set) var isWaiting = false
 
     private var pending: (() -> Void)?
+    private var scheduled: DispatchWorkItem?
     private var waitingSince = Date.distantPast
 
     /// After an answer (`correct` or not): do `action` after `delay`, or wait for `next()`.
     func after(_ delay: TimeInterval, correct: Bool, perform action: @escaping () -> Void) {
+        scheduled?.cancel()
+        scheduled = nil
         if AnswerPacing.current.waits(afterCorrect: correct) {
             pending = action
             waitingSince = Date()
             isWaiting = true
         } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+            let item = DispatchWorkItem { [weak self] in
+                self?.scheduled = nil
+                action()
+            }
+            scheduled = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
         }
     }
 
@@ -76,6 +84,8 @@ final class NextGate {
 
     /// Drop the waiting step (the game restarted or its settings changed).
     func cancel() {
+        scheduled?.cancel()
+        scheduled = nil
         pending = nil
         isWaiting = false
     }

@@ -88,6 +88,13 @@ protocol BackingSource {
 
 extension BackingSource {
     func cues(forBar bar: Int) -> [BackingCue] { [] }
+
+    /// Whether changing from `other` to this changes what you'd hear in these bars: their notes,
+    /// or the tempo and meter. (BackingTrack restarts the bar you're in when it does.)
+    func soundsDifferent(from other: any BackingSource, inBars bars: [Int]) -> Bool {
+        secondsPerBeat != other.secondsPerBeat || beatsPerBar != other.beatsPerBar
+            || bars.contains { hits(forBar: $0) != other.hits(forBar: $0) }
+    }
 }
 
 /// Something to show while part of a bar sounds: from `beat` for `beats`, named by `id`
@@ -128,6 +135,13 @@ struct SoloGroove: Codable, Equatable, BackingSource {
         a.presetID = nil; a.savedID = nil
         b.presetID = nil; b.savedID = nil
         return a == b
+    }
+
+    /// Whether changing from `other` to this changes what you'd hear in these bars: their notes,
+    /// or the tempo and meter. (A new scale to solo with, or a new name, doesn't.)
+    func soundsDifferent(from other: SoloGroove, inBars bars: [Int]) -> Bool {
+        bpm != other.bpm || beatsPerBar != other.beatsPerBar
+            || bars.contains { hits(forBar: $0) != other.hits(forBar: $0) }
     }
 
     /// "A Minor".
@@ -402,8 +416,9 @@ struct BarClock {
     private(set) var nextIndex = 0
     private(set) var nextFrame: Int64
 
-    init(firstBarFrame: Int64) {
+    init(firstBarFrame: Int64, firstIndex: Int = 0) {
         nextFrame = firstBarFrame
+        nextIndex = firstIndex
     }
 
     /// The bars that start before `horizon` and haven't been handed out yet.

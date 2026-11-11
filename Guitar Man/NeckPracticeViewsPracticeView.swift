@@ -93,7 +93,12 @@ struct PracticeView: View {
             BlockAppsView()
         }
         .fullScreenCover(isPresented: $showingSession) {
-            PracticeSessionView(plan: activePlan) { result in
+            PracticeSessionView(plan: activePlan, onStepChange: { stepID, config in
+                var plan = store.activePlan
+                guard let index = plan.steps.firstIndex(where: { $0.id == stepID }) else { return }
+                plan.steps[index].config = config
+                store.update(plan)
+            }) { result in
                 Analytics.dailyPracticeEnded(stepsPlanned: activePlan.steps.count,
                                              stepsCompleted: result.stepsCompleted, minutes: result.totalMinutes)
                 logSession(result: result)
@@ -273,7 +278,7 @@ struct PracticeView: View {
                 columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7),
                 spacing: 6
             ) {
-                ForEach(monthCells, id: \.self) { cell in
+                ForEach(monthCells, id: \.index) { cell in
                     heatmapCell(for: cell)
                 }
             }
@@ -331,6 +336,7 @@ struct PracticeView: View {
     }
 
     private struct HeatmapCell: Hashable {
+        let index: Int     // position in the grid, so blank cells have distinct ids
         let date: Date?    // nil = leading/trailing padding cell
         let minutes: Int?  // nil for padding cells
 
@@ -352,14 +358,14 @@ struct PracticeView: View {
         let leadingPad = firstWeekday - 1
         let mins = minutesByDay
 
-        var cells: [HeatmapCell] = (0..<leadingPad).map { _ in HeatmapCell(date: nil, minutes: nil) }
+        var cells: [HeatmapCell] = (0..<leadingPad).map { HeatmapCell(index: $0, date: nil, minutes: nil) }
         for offset in 0..<dayCount {
             let day = calendar.date(byAdding: .day, value: offset, to: interval.start)!
-            cells.append(HeatmapCell(date: day, minutes: mins[day] ?? 0))
+            cells.append(HeatmapCell(index: cells.count, date: day, minutes: mins[day] ?? 0))
         }
         // Pad to a multiple of 7.
         while cells.count % 7 != 0 {
-            cells.append(HeatmapCell(date: nil, minutes: nil))
+            cells.append(HeatmapCell(index: cells.count, date: nil, minutes: nil))
         }
         return cells
     }

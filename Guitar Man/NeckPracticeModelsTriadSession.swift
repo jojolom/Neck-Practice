@@ -93,6 +93,13 @@ final class TriadSession {
         drawNext()
     }
 
+    /// The question on screen is one the current settings could ask.
+    var currentFitsSettings: Bool {
+        guard let q = currentQuestion else { return true }
+        let highestBase = max(1, maxFret - (q.shape.fretOffsets.max() ?? 0))
+        return pool.contains { $0.id == q.shape.id } && q.baseFret <= highestBase
+    }
+
     // MARK: - Private
 
     private func drawNext() {

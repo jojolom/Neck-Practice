@@ -242,6 +242,21 @@ final class ScaleStudySession {
         startNewRound()
     }
 
+    /// Settings changed: the rhythm and tempo you're on follow straight away, without waiting
+    /// for the next round. In random mode they only change if this rhythm was turned off.
+    func applySettingsNow() {
+        switch rhythmMode {
+        case .fixed:
+            rhythm = fixedRhythm
+            bpm = fixedBPM
+        case .random:
+            guard !enabledRhythms.contains(rhythm) else { return }
+            let eligible = Rhythm.allCases.filter { enabledRhythms.contains($0) }
+            rhythm = eligible.randomElement() ?? .quarter
+            bpm = rhythm.randomBPM()
+        }
+    }
+
     // MARK: - Round Generation
 
     private func generateRound() {

@@ -10,8 +10,8 @@ import SwiftUI
 
 struct ExploreView: View {
 
-    @State private var selectedNote: Note? = nil
-    @State private var showAllLabels: Bool = true
+    @SavedSetting("reference.explore.note") private var selectedNote: Note? = nil
+    @SavedSetting("reference.explore.allLabels") private var showAllLabels: Bool = true
 
     private let maxFret = 22
 

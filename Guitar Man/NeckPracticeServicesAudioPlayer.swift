@@ -20,7 +20,14 @@ import Observation
 /// Global toggle shared across all modules.
 @Observable
 final class AudioSettings {
-    var isEnabled: Bool = true
+    private static let key = "audio.soundEnabled"
+
+    var isEnabled: Bool = UserDefaults.standard.object(forKey: AudioSettings.key) as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(isEnabled, forKey: AudioSettings.key)
+            if !isEnabled { AudioPlayer.shared.stopAll() }
+        }
+    }
 }
 
 // MARK: - AudioPlayer

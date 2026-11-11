@@ -12,10 +12,14 @@ struct ModeQuizView: View {
 
     @State private var session: ModeQuizSession
 
-    init(override: ModeStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((ModeStepConfig) -> Void)?
+
+    init(override: ModeStepConfig? = nil, onStepChange: ((ModeStepConfig) -> Void)? = nil) {
         let session = ModeQuizSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("modes"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
 
     @State private var picked: String? = nil
@@ -69,6 +73,13 @@ struct ModeQuizView: View {
             }
             .sheet(isPresented: $showSettings) {
                 ModeQuizSettingsView(session: session)
+            }
+            // A new question only if this kind was turned off; otherwise it stays.
+            .savesSettings(session.settings, game: "modes", step: onStepChange) {
+                if !session.currentFitsSettings { session.advance() }
+            }
+            .onChange(of: session.choiceCount) {
+                if picked == nil, !isLocked { session.refreshChoices() }
             }
             // Drawing a question bumps questionNumber, which resets the screen.
             .onAppear { session.start() }

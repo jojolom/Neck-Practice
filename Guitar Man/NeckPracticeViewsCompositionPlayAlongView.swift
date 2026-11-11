@@ -13,7 +13,7 @@ import SwiftUI
 
 struct CompositionPlayAlongView: View {
 
-    private enum Part: String, CaseIterable {
+    private enum Part: String, CaseIterable, Codable {
         case chords = "Chords"
         case melody = "Melody"
     }
@@ -23,7 +23,7 @@ struct CompositionPlayAlongView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var listener = ChordListener()
     @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
-    @State private var part: Part = .chords
+    @SavedSetting("compose.playAlongPart") private var part: Part = .chords
     /// Index into the part's chords or notes of the one being listened for.
     @State private var current = 0
     /// Chord (by start beat) or note (by start eighth) → heard (true) or skipped (false).

@@ -13,10 +13,14 @@ struct SightReadingView: View {
     @State private var session: SightReadingSession
     @State private var showingSettings = false
 
-    init(override: SightReadingStepConfig? = nil) {
+    /// In Daily Practice: where a settings change is saved, instead of the game's own settings.
+    private let onStepChange: ((SightReadingStepConfig) -> Void)?
+
+    init(override: SightReadingStepConfig? = nil, onStepChange: ((SightReadingStepConfig) -> Void)? = nil) {
         let session = SightReadingSession()
-        session.apply(override: override)
+        session.apply(override: override ?? GameSettings.load("sightReading"))
         _session = State(initialValue: session)
+        self.onStepChange = onStepChange
     }
     @State private var selectedPosition: FretboardPosition? = nil
     @State private var answerResult: Bool? = nil
@@ -131,6 +135,7 @@ struct SightReadingView: View {
             .sheet(isPresented: $showingSettings) {
                 SightReadingSettingsView(session: session)
             }
+            .savesSettings(session.settings, game: "sightReading", step: onStepChange) { settingsChanged() }
             .onAppear {
                 session.start()
                 playCurrentNote()
@@ -193,6 +198,17 @@ struct SightReadingView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             isNewQuestionLocked = false
         }
+    }
+
+    /// A new note only if this one no longer fits the settings; otherwise it stays.
+    private func settingsChanged() {
+        guard !session.currentFitsSettings else {
+            session.refreshValidPositions()
+            return
+        }
+        nextGate.cancel()
+        resetState()
+        session.advance()
     }
 
     private func resetState() {
