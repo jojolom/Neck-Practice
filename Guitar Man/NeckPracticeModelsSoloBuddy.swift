@@ -3,9 +3,9 @@
 //  Guitar Man
 //
 //  Solo Buddy: a backing track to practise pentatonic soloing over. Pick a key, one to four
-//  chords (as Roman numerals, like Compose, so a preset works in any key) or the 12-bar blues,
-//  a style, and a tempo; it loops on the recorded nylon guitar while you solo with the
-//  pentatonic box it shows.
+//  chords (as Roman numerals, like Compose, so a preset works in any key), a style, and a
+//  tempo; it loops on the recorded nylon guitar while you solo with the pentatonic box it
+//  shows. (The blues has its own screen, Blues Buddy: see BluesBuddy.swift.)
 //
 //  Every style is a pattern played on each chord's guitar shape (see ChordVoicing): which
 //  strings, when, how long. So any style plays any chord in any key: fingerpicking walks the
@@ -70,16 +70,25 @@ enum BackingStyle: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Groove
 
-/// Loop the chords in order, or play the 12-bar blues in the key.
+/// Solo Buddy loops its chords in order. It used to play the 12-bar blues too, until Blues
+/// Buddy took that over: `twelveBar` is still read from old saves, so they can be moved there
+/// (see SavedGrooves).
 enum SoloForm: String, Codable {
     case loop, twelveBar
 }
 
+/// Anything BackingTrack can loop: a tempo, a bar length, and each bar's notes.
+protocol BackingSource {
+    var secondsPerBeat: Double { get }
+    var beatsPerBar: Int { get }
+    func hits(forBar bar: Int) -> [SoloGroove.Hit]
+}
+
 /// Everything Solo Buddy plays, and the scale it suggests soloing with. Saved between visits.
-struct SoloGroove: Codable, Equatable {
+struct SoloGroove: Codable, Equatable, BackingSource {
     var keyRoot: Note = .a
     var isMinor = true
-    /// One to four chords, looped in order (ignored by the 12-bar form).
+    /// One to four chords, looped in order.
     var chords: [ChordSymbol] = [ChordSymbol(degree: 1), ChordSymbol(degree: 7), ChordSymbol(degree: 6),
                                  ChordSymbol(degree: 5, kind: .major)]
     var form: SoloForm = .loop
@@ -125,17 +134,8 @@ struct SoloGroove: Codable, Equatable {
 
     /// One time through, bar by bar.
     var bars: [ChordSymbol] {
-        switch form {
-        case .loop:
-            let chords = Array(self.chords.prefix(Self.chordRange.upperBound))
-            return chords.flatMap { Array(repeating: $0, count: min(max(barsPerChord, 1), 2)) }
-        case .twelveBar:
-            // In major: I7 IV7 V7. In minor: i7 iv7 and a dominant V7.
-            let one = ChordSymbol(degree: 1, kind: isMinor ? .minor7 : .dominant7)
-            let four = ChordSymbol(degree: 4, kind: isMinor ? .minor7 : .dominant7)
-            let five = ChordSymbol(degree: 5, kind: .dominant7)
-            return [one, four, one, one, four, four, one, one, five, four, one, five]
-        }
+        let chords = Array(self.chords.prefix(Self.chordRange.upperBound))
+        return chords.flatMap { Array(repeating: $0, count: min(max(barsPerChord, 1), 2)) }
     }
 
     /// The chord played in bar `bar` (counting on through the repeats).
@@ -302,17 +302,7 @@ struct SoloGroove: Codable, Equatable {
 struct SoloPreset: Identifiable {
     enum Group: String, CaseIterable {
         case minor = "Minor Keys"
-        case blues = "Blues"
         case major = "Major Keys"
-
-        /// For a three-way switch: "Minor", "Blues", "Major".
-        var shortName: String {
-            switch self {
-            case .minor: return "Minor"
-            case .blues: return "Blues"
-            case .major: return "Major"
-            }
-        }
     }
 
     let id: String
@@ -322,14 +312,14 @@ struct SoloPreset: Identifiable {
     let groove: SoloGroove
 
     private init(_ id: String, _ name: String, _ detail: String, _ group: Group, key: Note, minor: Bool,
-                 _ chords: [ChordSymbol], form: SoloForm = .loop, style: BackingStyle, bpm: Int,
+                 _ chords: [ChordSymbol], style: BackingStyle, bpm: Int,
                  bars: Int = 1, scale: PentatonicQuality) {
         self.id = id
         self.name = name
         self.detail = detail
         self.group = group
-        groove = SoloGroove(keyRoot: key, isMinor: minor, chords: chords.isEmpty ? [ChordSymbol(degree: 1)] : chords,
-                            form: form, style: style, bpm: bpm, barsPerChord: bars, scale: scale, presetID: id)
+        groove = SoloGroove(keyRoot: key, isMinor: minor, chords: chords,
+                            form: .loop, style: style, bpm: bpm, barsPerChord: bars, scale: scale, presetID: id)
     }
 
     private static func c(_ degree: Int, _ kind: ChordKind = .triad, shift: Int = 0) -> ChordSymbol {
@@ -358,19 +348,9 @@ struct SoloPreset: Identifiable {
         SoloPreset("minor-waltz", "Minor Waltz", "A haunting 3/4: i–iv–V–i.", .minor,
                    key: .d, minor: true, [c(1), c(4), c(5, .major), c(1)], style: .waltz, bpm: 110, scale: .minor),
 
-        // Blues: minor pentatonic over dominant 7ths, the classic sound.
-        SoloPreset("twelve-bar", "12-Bar Blues", "I7, IV7 and V7 with a shuffle. Solo with the minor pentatonic.", .blues,
-                   key: .a, minor: false, [], form: .twelveBar, style: .shuffle, bpm: 90, scale: .minor),
-        SoloPreset("slow-blues", "Slow Blues", "Twelve bars, slow and heavy, in E.", .blues,
-                   key: .e, minor: false, [], form: .twelveBar, style: .shuffle, bpm: 62, scale: .minor),
-        SoloPreset("minor-blues", "Minor Blues", "The twelve bars in minor: i7, iv7 and V7.", .blues,
-                   key: .a, minor: true, [], form: .twelveBar, style: .ballad, bpm: 72, scale: .minor),
-        SoloPreset("funky-dominant", "Funky Dominant", "One dominant 7th to wail over with the minor pentatonic.", .blues,
-                   key: .e, minor: false, [c(1, .dominant7)], style: .funk, bpm: 104, scale: .minor),
-        SoloPreset("mixolydian-rock", "Classic Rock", "I–♭VII–IV–I: rock's favourite borrowed chord.", .blues,
+        // Major keys: major pentatonic on the tonic (Classic Rock's ♭VII wants the minor one).
+        SoloPreset("mixolydian-rock", "Classic Rock", "I–♭VII–IV–I: rock's favourite borrowed chord.", .major,
                    key: .a, minor: false, [c(1), c(7, .major, shift: -1), c(4), c(1)], style: .rock, bpm: 120, scale: .minor),
-
-        // Major keys: major pentatonic on the tonic.
         SoloPreset("pop-anthem", "Pop Anthem", "The four chords: I–V–vi–IV.", .major,
                    key: .g, minor: false, [c(1), c(5), c(6), c(4)], style: .strummed, bpm: 100, scale: .major),
         SoloPreset("sunny", "Sunny Two-Chord", "Back and forth between I and IV.", .major,
@@ -449,9 +429,11 @@ struct SavedGroove: Codable, Equatable, Identifiable {
     }
 }
 
-/// Saved grooves, newest first, kept in UserDefaults.
+/// Saved grooves, newest first, and the groove playing, kept in UserDefaults. A 12-bar blues
+/// from before Blues Buddy (saved, or left playing) is handed to it on the way in.
 enum SavedGrooves {
     static let key = "soloBuddy.savedGrooves"
+    static let currentKey = "soloBuddy.groove"
 
     /// Where 1.5's TestFlight builds kept the one groove you'd made ("Your Groove").
     static let oldYourGrooveKey = "soloBuddy.myGroove"
@@ -470,7 +452,29 @@ enum SavedGrooves {
             }
             defaults.removeObject(forKey: oldYourGrooveKey)
         }
+        // The 12-bar blues lives in Blues Buddy now.
+        let blues = saved.filter { $0.groove.form == .twelveBar }
+        if !blues.isEmpty {
+            SavedBluesGrooves.adopt(blues, defaults)
+            saved.removeAll { $0.groove.form == .twelveBar }
+            store(saved, defaults)
+        }
         return saved.sorted { $0.savedAt > $1.savedAt }
+    }
+
+    /// The groove Solo Buddy was playing last, or the first preset.
+    static func loadCurrent(_ defaults: UserDefaults = .standard) -> SoloGroove {
+        guard let groove = defaults.data(forKey: currentKey).flatMap({ try? JSONDecoder().decode(SoloGroove.self, from: $0) }) else {
+            return SoloPreset.all[0].groove
+        }
+        guard groove.form == .twelveBar else { return groove }
+        SavedBluesGrooves.adoptCurrent(groove, defaults)
+        defaults.removeObject(forKey: currentKey)
+        return SoloPreset.all[0].groove
+    }
+
+    static func storeCurrent(_ groove: SoloGroove, _ defaults: UserDefaults = .standard) {
+        if let data = try? JSONEncoder().encode(groove) { defaults.set(data, forKey: currentKey) }
     }
 
     static func store(_ saved: [SavedGroove], _ defaults: UserDefaults = .standard) {
@@ -479,7 +483,10 @@ enum SavedGrooves {
 
     /// `base`, or "base 2", "base 3"… if a saved groove already has that name.
     static func unusedName(_ base: String, in saved: [SavedGroove]) -> String {
-        let names = Set(saved.map(\.name))
+        unusedName(base, among: Set(saved.map(\.name)))
+    }
+
+    static func unusedName(_ base: String, among names: Set<String>) -> String {
         guard names.contains(base) else { return base }
         var number = 2
         while names.contains("\(base) \(number)") { number += 1 }

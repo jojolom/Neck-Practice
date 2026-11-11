@@ -132,6 +132,14 @@ extension ExerciseItem {
             group: .play
         ),
         ExerciseItem(
+            title: "Blues Buddy",
+            subtitle: "A blues partner: picked bass, chords and fills, never the same twice",
+            icon: "music.mic",
+            color: .blue,
+            isAvailable: true,
+            group: .play
+        ),
+        ExerciseItem(
             title: "Compose",
             subtitle: "Build chord progressions with Roman numerals, then play them",
             icon: "music.note.house.fill",
@@ -449,6 +457,7 @@ struct HomeView: View {
         case "Theory Basics":       TheoryQuizView()
         case "Compose":             CompositionListView()
         case "Solo Buddy":          SoloBuddyView()
+        case "Blues Buddy":         BluesBuddyView()
         default:                    EmptyView()
         }
     }

@@ -4,12 +4,13 @@
 //  Offline check for Solo Buddy (SoloGroove, SoloPreset, BarClock): every preset, moved to
 //  every key and played in every style, gives a playable bar each time — every note one of the
 //  chord's (the boogie bass's 6th aside), on the guitar, inside its bar, not too many ringing
-//  at once, the bass first; the 12-bar blues and two-bar chords come out bar by bar as they
-//  should; every preset chord has a shape low on the neck; grooves save and load; and the bar
-//  clock keeps bars back to back, on time, through a tempo change.
+//  at once, the bass first; two-bar chords come out bar by bar as they should; every preset
+//  chord has a shape low on the neck; grooves save and load; and the bar clock keeps bars back
+//  to back, on time, through a tempo change. (The 12-bar blues moved to Blues Buddy: see
+//  blues-buddy-check.swift, which also checks old 12-bar grooves moving over.)
 //
 //  Run from the repo root:
-//    swiftc -O -parse-as-library -o /tmp/solo-buddy-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsChord.swift" "Guitar Man/NeckPracticeModelsChordVoicing.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsSoloBuddy.swift" scripts/solo-buddy-check.swift && /tmp/solo-buddy-check
+//    swiftc -O -parse-as-library -o /tmp/solo-buddy-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsChord.swift" "Guitar Man/NeckPracticeModelsChordVoicing.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsSoloBuddy.swift" "Guitar Man/NeckPracticeModelsBluesBuddy.swift" scripts/solo-buddy-check.swift && /tmp/solo-buddy-check
 //
 
 import Foundation
@@ -44,7 +45,7 @@ struct SoloBuddyCheck {
             let g = preset.groove
             check(g.presetID == preset.id, "\(preset.name): knows its preset")
             check(SoloGroove.tempoRange.contains(g.bpm), "\(preset.name): tempo \(g.bpm)")
-            check(g.form == .twelveBar || SoloGroove.chordRange.contains(g.chords.count), "\(preset.name): 1–4 chords")
+            check(g.form == .loop && SoloGroove.chordRange.contains(g.chords.count), "\(preset.name): 1–4 chords, looped")
             check([1, 2].contains(g.barsPerChord), "\(preset.name): bars per chord")
             for symbol in Set(g.bars.map { $0 }) {
                 let shape = SoloGroove.shape(for: g.chord(symbol))
@@ -65,15 +66,6 @@ struct SoloBuddyCheck {
     }
 
     static func checkBars() {
-        var g = SoloGroove()
-        g.keyRoot = .a
-        g.isMinor = false
-        g.form = .twelveBar
-        let names = g.bars.map { g.chord($0).name }
-        check(names == ["A7", "D7", "A7", "A7", "D7", "D7", "A7", "A7", "E7", "D7", "A7", "E7"], "12-bar in A: \(names)")
-        g.isMinor = true
-        check(g.bars.map { g.chord($0).name } == ["Am7", "Dm7", "Am7", "Am7", "Dm7", "Dm7", "Am7", "Am7", "E7", "Dm7", "Am7", "E7"],
-              "minor 12-bar in A: \(g.bars.map { g.chord($0).name })")
         var loop = SoloGroove()
         loop.form = .loop
         loop.chords = [ChordSymbol(degree: 1), ChordSymbol(degree: 4)]
@@ -89,7 +81,7 @@ struct SoloBuddyCheck {
         flat.isMinor = false
         flat.scale = .major
         check(flat.scaleName == "B♭ major pentatonic", "spelled in the key: \(flat.scaleName)")
-        print("ok   bars: 12-bar, minor 12-bar, two bars a chord, looping")
+        print("ok   bars: two bars a chord, looping")
     }
 
     static func checkEveryStyleEveryKey() {

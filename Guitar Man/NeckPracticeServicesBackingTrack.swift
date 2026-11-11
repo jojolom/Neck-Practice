@@ -2,11 +2,12 @@
 //  BackingTrack.swift
 //  Guitar Man
 //
-//  Plays Solo Buddy's groove on a loop, on AudioPlayer's sample-accurate timeline. A timer
-//  hands each bar to AudioPlayer a moment before it's due (see BarClock), so every bar starts
-//  exactly where the last ended, and a change to the groove (chords, style, tempo, key) comes
-//  in at the next bar. An optional one-bar count-in and a click on every beat use the
-//  metronome's click (ClickVoice). Stops for calls and when the app goes to the background.
+//  Plays a groove on a loop (Solo Buddy's, or a take of Blues Buddy's: any BackingSource), on
+//  AudioPlayer's sample-accurate timeline. A timer hands each bar to AudioPlayer a moment
+//  before it's due (see BarClock), so every bar starts exactly where the last ended, and a
+//  change to the groove (chords, style, tempo, key) comes in at the next bar. An optional
+//  one-bar count-in and a click on every beat use the metronome's click (ClickVoice). Stops
+//  for calls and when the app goes to the background.
 //
 
 import AVFoundation
@@ -17,7 +18,7 @@ import UIKit
 final class BackingTrack {
 
     /// What it plays; changes take effect from the next bar.
-    var groove = SoloGroove()
+    var groove: any BackingSource = SoloGroove()
     /// One bar of clicks before the backing starts.
     var countsIn = true
     /// A click on every beat while it plays.

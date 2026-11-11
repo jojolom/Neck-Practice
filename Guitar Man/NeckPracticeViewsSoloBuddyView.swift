@@ -2,25 +2,25 @@
 //  SoloBuddyView.swift
 //  Guitar Man
 //
-//  Solo Buddy: pick a key, one to four chords (or the 12-bar blues), a style and a tempo, or
-//  start from a preset, and it plays a backing to solo over on the nylon guitar. The Grooves
-//  button at the top names the groove playing and opens the Grooves sheet: save it (or save
-//  changes to one you saved), start from scratch, or pick one of yours or a preset. The card
-//  under it shows the chord you're on and the next one; the fretboard shows the pentatonic box
-//  to solo with, any of its five positions; chords and settings come after. Chords are Roman
-//  numerals (as in Compose), so a preset or your own progression plays in any key. The groove
-//  playing is remembered, and saved grooves are kept (SavedGrooves).
+//  Solo Buddy: pick a key, one to four chords, a style and a tempo, or start from a preset,
+//  and it plays a backing to solo over on the nylon guitar (the blues has its own screen,
+//  Blues Buddy). The Grooves button at the top names the groove playing and opens the Grooves
+//  sheet: save it (or save changes to one you saved), start from scratch, or pick one of
+//  yours or a preset. The card under it shows the chord you're on and the next one; the
+//  fretboard shows the pentatonic box to solo with, any of its five positions; chords and
+//  settings come after. Chords are Roman numerals (as in Compose), so a preset or your own
+//  progression plays in any key. The groove playing is remembered, and saved grooves are kept
+//  (SavedGrooves).
 //
 
 import SwiftUI
 
 struct SoloBuddyView: View {
 
-    private static let storageKey = "soloBuddy.groove"
     private static let chordsID = "soloBuddy.chords"
 
     @State private var track = BackingTrack()
-    @State private var groove: SoloGroove = SoloBuddyView.loadGroove()
+    @State private var groove: SoloGroove = SavedGrooves.loadCurrent()
     @State private var saved: [SavedGroove] = SavedGrooves.load()
     @AppStorage("soloBuddy.countIn") private var countsIn = true
     @AppStorage("soloBuddy.click") private var clicks = false
@@ -86,9 +86,7 @@ struct SoloBuddyView: View {
             .onDisappear { track.stop() }
             .onChange(of: groove) { _, updated in
                 track.groove = updated
-                if let data = try? JSONEncoder().encode(updated) {
-                    UserDefaults.standard.set(data, forKey: Self.storageKey)
-                }
+                SavedGrooves.storeCurrent(updated)
             }
             .onChange(of: saved) { _, updated in SavedGrooves.store(updated) }
             .onChange(of: countsIn) { track.countsIn = countsIn }
@@ -97,11 +95,6 @@ struct SoloBuddyView: View {
                 if phase != .active { track.stop() }
             }
         }
-    }
-
-    private static func loadGroove() -> SoloGroove {
-        UserDefaults.standard.data(forKey: storageKey)
-            .flatMap { try? JSONDecoder().decode(SoloGroove.self, from: $0) } ?? SoloPreset.all[0].groove
     }
 
     /// The chord picker: changing the chord in a slot, or adding chords to the end.
@@ -236,107 +229,57 @@ struct SoloBuddyView: View {
 
     private var chordRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(groove.form == .twelveBar ? "12-Bar Blues" : "Chords")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Spacer()
-                Picker("Form", selection: Binding(
-                    get: { groove.form },
-                    set: { form in
-                        groove.form = form
-                        groove.presetID = nil
-                    }
-                )) {
-                    Text("My Chords").tag(SoloForm.loop)
-                    Text("12-Bar Blues").tag(SoloForm.twelveBar)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 210)
-            }
+            Text("Chords")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
 
-            if groove.form == .twelveBar {
-                twelveBarChart
-            } else {
-                HStack(spacing: 8) {
-                    ForEach(Array(groove.chords.prefix(4).enumerated()), id: \.offset) { index, symbol in
-                        chordChip(symbol, isCurrent: isCurrent(slot: index)) {
-                            picking = .change(index)
-                        }
-                        .contextMenu {
-                            if groove.chords.count > 1 {
-                                Button(role: .destructive) {
-                                    removeChord(at: index)
-                                } label: {
-                                    Label("Remove Chord", systemImage: "trash")
-                                }
+            HStack(spacing: 8) {
+                ForEach(Array(groove.chords.prefix(4).enumerated()), id: \.offset) { index, symbol in
+                    chordChip(symbol, isCurrent: isCurrent(slot: index)) {
+                        picking = .change(index)
+                    }
+                    .contextMenu {
+                        if groove.chords.count > 1 {
+                            Button(role: .destructive) {
+                                removeChord(at: index)
+                            } label: {
+                                Label("Remove Chord", systemImage: "trash")
                             }
                         }
-                    }
-                    if groove.chords.count < SoloGroove.chordRange.upperBound {
-                        Button {
-                            picking = .add
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 18, weight: .semibold))
-                                .frame(maxWidth: .infinity, minHeight: 58)
-                                .background(Color(.tertiarySystemFill))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Add a chord")
                     }
                 }
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Tap a chord to change it. Long-press to remove it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    if groove.chords.count > 1 {
-                        Button("Start Over") {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                groove.chords = [ChordSymbol(degree: 1)]
-                                groove.presetID = nil
-                            }
-                            picking = .add
-                        }
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .accessibilityHint("Keeps just the key's one chord, then lets you add the next")
+                if groove.chords.count < SoloGroove.chordRange.upperBound {
+                    Button {
+                        picking = .add
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 58)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add a chord")
+                }
+            }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Tap a chord to change it. Long-press to remove it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if groove.chords.count > 1 {
+                    Button("Start Over") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            groove.chords = [ChordSymbol(degree: 1)]
+                            groove.presetID = nil
+                        }
+                        picking = .add
+                    }
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .accessibilityHint("Keeps just the key's one chord, then lets you add the next")
                 }
             }
         }
         .padding(.horizontal, 20)
-    }
-
-    /// The 12 bars in three lines of four, the one playing lit.
-    private var twelveBarChart: some View {
-        let bars = groove.bars
-        let playing = track.bar.map { $0 % bars.count }
-        return VStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { line in
-                HStack(spacing: 6) {
-                    ForEach(0..<4, id: \.self) { column in
-                        let index = line * 4 + column
-                        let chord = groove.chord(bars[index])
-                        let isOn = track.isPlaying && playing == index
-                        VStack(spacing: 1) {
-                            Text(chord.name)
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
-                            Text(chord.romanNumeral)
-                                .font(.system(size: 11, weight: .semibold, design: .serif))
-                                .foregroundStyle(isOn ? .white.opacity(0.85) : .secondary)
-                        }
-                        .foregroundStyle(isOn ? .white : .primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(isOn ? Color.accentColor : Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Twelve-bar blues: " + bars.map { groove.chord($0).name }.joined(separator: ", "))
     }
 
     private func isCurrent(slot: Int) -> Bool {
@@ -632,11 +575,9 @@ private struct GroovesSheet: View {
         return !mine.groove.sameMusic(as: groove)
     }
 
-    /// "Am – G – F – E", or the 12-bar blues.
+    /// "Am – G – F – E".
     static func chordList(_ groove: SoloGroove) -> String {
-        groove.form == .twelveBar
-            ? "The 12-bar blues"
-            : groove.chords.map { groove.chord($0).name }.joined(separator: " – ")
+        groove.chords.map { groove.chord($0).name }.joined(separator: " – ")
     }
 
     private var current: SavedGroove? {
@@ -651,7 +592,7 @@ private struct GroovesSheet: View {
         guard groove.presetID == nil else { return false }
         if current != nil { return hasChanges }
         if saved.contains(where: { $0.groove.sameMusic(as: groove) }) { return false }
-        return !(groove.form == .loop && groove.chords.count <= 1)
+        return groove.chords.count > 1
     }
 
     // MARK: Body
