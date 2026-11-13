@@ -171,15 +171,24 @@ struct KeySignature: Hashable, Codable {
 
 // MARK: - NoteValue
 
-/// How long a note lasts. Drives note-head drawing and measure lengths. Chords last whole
-/// quarter-note beats (`chordValues`); melody notes can also be eighths and dotted quarters.
+/// How long a note lasts. Drives note-head drawing and measure lengths. Lengths are counted in
+/// ticks, twelve to a quarter-note beat, which is fine enough for sixteenths (3 ticks) and
+/// eighth-note triplets (4) alike. Chords last whole beats (`chordValues`); melody notes can be
+/// any of them.
 enum NoteValue: String, Codable, CaseIterable, Identifiable {
-    case eighth, quarter, dottedQuarter, half, dottedHalf, whole
+    // In order of length.
+    case sixteenth, tripletEighth, eighth, dottedEighth, quarter, dottedQuarter, half, dottedHalf, whole
 
     var id: String { rawValue }
 
+    static let ticksPerBeat = 12
+
     /// The values a chord can have: whole beats.
     static let chordValues: [NoteValue] = [.quarter, .half, .dottedHalf, .whole]
+
+    /// The values a gap or a shortened note can take: all but the triplet, which only fits a
+    /// beat that's split in three.
+    static let plainValues: [NoteValue] = allCases.filter { $0 != .tripletEighth }
 
     /// The chord value lasting `beats` quarter notes (1–4), or nil.
     init?(beats: Int) {
@@ -187,34 +196,41 @@ enum NoteValue: String, Codable, CaseIterable, Identifiable {
         self = value
     }
 
-    /// The value lasting `eighths` eighth notes (1, 2, 3, 4, 6 or 8), or nil.
-    init?(eighths: Int) {
-        guard let value = Self.allCases.first(where: { $0.eighths == eighths }) else { return nil }
+    /// The value lasting exactly `ticks`, or nil.
+    init?(ticks: Int) {
+        guard let value = Self.allCases.first(where: { $0.ticks == ticks }) else { return nil }
         self = value
     }
 
-    /// The longest value that lasts at most `eighths`, or nil if that's under an eighth.
-    static func longest(fitting eighths: Int) -> NoteValue? {
-        allCases.last { $0.eighths <= eighths }
+    /// The longest plain value that lasts at most `ticks`, or nil if that's under a sixteenth.
+    static func longest(fitting ticks: Int) -> NoteValue? {
+        plainValues.last { $0.ticks <= ticks }
     }
 
-    var eighths: Int {
+    var ticks: Int {
         switch self {
-        case .eighth:        return 1
-        case .quarter:       return 2
-        case .dottedQuarter: return 3
-        case .half:          return 4
-        case .dottedHalf:    return 6
-        case .whole:         return 8
+        case .sixteenth:     return 3
+        case .tripletEighth: return 4
+        case .eighth:        return 6
+        case .dottedEighth:  return 9
+        case .quarter:       return 12
+        case .dottedQuarter: return 18
+        case .half:          return 24
+        case .dottedHalf:    return 36
+        case .whole:         return 48
         }
     }
 
-    /// Length in quarter-note beats, rounded down (an eighth is 0): for chords, which only use whole beats.
-    var beats: Int { eighths / 2 }
+    /// Length in quarter-note beats, rounded down (anything under a quarter is 0): for chords,
+    /// which only use whole beats.
+    var beats: Int { ticks / Self.ticksPerBeat }
 
     var displayName: String {
         switch self {
+        case .sixteenth:     return "Sixteenth"
+        case .tripletEighth: return "Triplet"
         case .eighth:        return "Eighth"
+        case .dottedEighth:  return "Dotted Eighth"
         case .quarter:       return "Quarter"
         case .dottedQuarter: return "Dotted Quarter"
         case .half:          return "Half"
@@ -223,10 +239,28 @@ enum NoteValue: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// "a quarter note", "an eighth note", "a triplet eighth note".
+    var phrase: String {
+        switch self {
+        case .eighth:        return "an eighth note"
+        case .tripletEighth: return "a triplet eighth note"
+        default:             return "a \(displayName.lowercased()) note"
+        }
+    }
+
     var hasStem: Bool { self != .whole }
-    var hasFlag: Bool { self == .eighth }
-    var isFilled: Bool { [.eighth, .quarter, .dottedQuarter].contains(self) }
-    var isDotted: Bool { self == .dottedHalf || self == .dottedQuarter }
+    /// Flags on the stem: one for an eighth, two for a sixteenth.
+    var flags: Int {
+        switch self {
+        case .sixteenth: return 2
+        case .tripletEighth, .eighth, .dottedEighth: return 1
+        default: return 0
+        }
+    }
+    var hasFlag: Bool { flags > 0 }
+    var isFilled: Bool { ticks < NoteValue.half.ticks }
+    var isDotted: Bool { [.dottedEighth, .dottedQuarter, .dottedHalf].contains(self) }
+    var isTriplet: Bool { self == .tripletEighth }
 }
 
 // MARK: - MeasureAccidentals

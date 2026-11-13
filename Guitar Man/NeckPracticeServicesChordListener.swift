@@ -31,6 +31,15 @@ final class ChordListener {
     private(set) var isListening = false
     private(set) var permissionDenied = false
 
+    /// Also work out the pitch of a single note at each analysis (see `onAnalysis`): for
+    /// writing a melody by playing it. Set before `start()`.
+    var tracksPitch = false
+    /// Called on the main thread at each strum or pluck, as it's counted.
+    var onStrum: (() -> Void)? = nil
+    /// Called on the main thread with each analysis: the chroma, and with `tracksPitch` the
+    /// frequency of the note sounding (nil if there's no clear single pitch).
+    var onAnalysis: ((_ chroma: [Double], _ frequency: Double?) -> Void)? = nil
+
     // MARK: - Audio
 
     private let engine = AVAudioEngine()
@@ -172,6 +181,8 @@ final class ChordListener {
         samplesSinceAnalysis += frameCount
 
         var newChroma: [Double]? = nil
+        var frequency: Double? = nil
+        let tracksPitch = tracksPitch
         var windowRMS: Float = 0
         if samplesSinceAnalysis >= analysisHop && ring.count >= needed {
             samplesSinceAnalysis = 0
@@ -180,16 +191,24 @@ final class ChordListener {
             newChroma = windowRMS > minRMS
                 ? ChordAnalyzer.chroma(samples: window, sampleRate: sampleRate)
                 : Array(repeating: 0, count: 12)
+            if tracksPitch && windowRMS > minRMS {
+                frequency = PitchAnalyzer.detectFrequency(in: Array(ring.suffix(PitchAnalyzer.windowSize)), sampleRate: sampleRate,
+                                                          maxFrequency: 1400, anyString: true)
+            }
         }
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.signalLevel = level
-            if isStrum { self.strumCount += 1 }
+            if isStrum {
+                self.strumCount += 1
+                self.onStrum?()
+            }
             if let newChroma {
                 self.chroma = newChroma
                 self.displayLevels = ChordAnalyzer.displayLevels(previous: self.displayLevels,
                                                                     chroma: newChroma, rms: windowRMS)
+                self.onAnalysis?(newChroma, frequency)
             }
         }
     }

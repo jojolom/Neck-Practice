@@ -23,6 +23,7 @@ struct CompositionPlayAlongView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var listener = ChordListener()
     @AppStorage(ComposeSettingsView.chordsUnderMelodyKey) private var chordsUnderMelody = true
+    @AppStorage(ComposeSettingsView.tabKey) private var showsTab = true
     @SavedSetting("compose.playAlongPart") private var part: Part = .chords
     /// Index into the part's chords or notes of the one being listened for.
     @State private var current = 0
@@ -34,8 +35,9 @@ struct CompositionPlayAlongView: View {
     @State private var matchStreak = 0
 
     /// The chords in order (rests in between are skipped: you play at your own pace).
-    private var chords: [Composition.PlacedChord] { composition.chords }
-    private var notes: [Composition.MelodyNote] { composition.melody }
+    // What's struck: a chord or note carrying on a tie isn't played again.
+    private var chords: [Composition.PlacedChord] { composition.struckChords }
+    private var notes: [Composition.MelodyNote] { composition.struckMelody }
 
     private var count: Int { part == .chords ? chords.count : notes.count }
     private var isFinished: Bool { current >= count }
@@ -73,7 +75,8 @@ struct CompositionPlayAlongView: View {
                     CompositionStaffView(composition: composition,
                                          chordColors: part == .chords ? colors : [:],
                                          noteColors: part == .melody ? colors : [:],
-                                         showsChordsUnderMelody: chordsUnderMelody)
+                                         showsChordsUnderMelody: chordsUnderMelody,
+                                         showsTab: showsTab)
                         .padding(.horizontal, 12)
 
                     if listener.isListening && !isFinished {
