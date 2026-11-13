@@ -15,7 +15,9 @@
 //  over, once. Trade Licks: turns of one, two and four bars, a lick in every bar of Buddy's
 //  turn and none in yours, every lick note a dot that's showing (top four strings, one at a
 //  time, ending on a chord note with room left before your turn), a quiet backing under it,
-//  and cues that match the notes.
+//  and cues that match the notes. Chords you change: a bar takes any chord from the picker,
+//  in any key; the form's chord, another form or Reset puts it back; it saves and loads; the
+//  follow rules go by the new chord; and thousands of bars with changed chords are playable.
 //
 //  Run from the repo root:
 //    swiftc -O -parse-as-library -o /tmp/blues-buddy-check "Guitar Man/NeckPracticeModelsNote.swift" "Guitar Man/NeckPracticeModelsFretboard.swift" "Guitar Man/NeckPracticeModelsNotation.swift" "Guitar Man/NeckPracticeModelsRomanNumeral.swift" "Guitar Man/NeckPracticeModelsChord.swift" "Guitar Man/NeckPracticeModelsChordVoicing.swift" "Guitar Man/NeckPracticeModelsPentatonic.swift" "Guitar Man/NeckPracticeModelsSoloBuddy.swift" "Guitar Man/NeckPracticeModelsBluesBuddy.swift" scripts/blues-buddy-check.swift && /tmp/blues-buddy-check
@@ -45,6 +47,7 @@ struct BluesBuddyCheck {
         checkFills()
         checkTradeLicks()
         checkPresetsAndSaving()
+        checkChangedChords()
         checkMovingFromSoloBuddy()
         print(failures == 0 ? "All Blues Buddy checks passed." : "\(failures) failure(s).")
         exit(failures == 0 ? 0 : 1)
@@ -233,7 +236,6 @@ struct BluesBuddyCheck {
 
     static func checkEveryBar() {
         var bars = 0, notes = 0, maxRinging = 0
-        let end = Double(BluesGroove.beatsPerBar)
         for form in BluesForm.allCases {
             for feel in BluesFeel.allCases {
                 for root in Note.allCases {
@@ -244,50 +246,11 @@ struct BluesBuddyCheck {
                                                 followsChords: showing.rule != nil, followRule: showing.rule ?? .tonic)
                             let seed = UInt64(bars) &* 7919 &+ UInt64(s) &+ UInt64(v) &* 31
                             for bar in 0..<(g.barCount * 3) {
-                                let chord = g.chord(forBar: bar)
-                                let played = g.bar(bar, seed: seed)
-                                let label = "\(form) \(feel) in \(g.keyName), switches \(mix), showing \(showing), bar \(bar + 1) (\(chord.name))"
+                                let label = "\(form) \(feel) in \(g.keyName), switches \(mix), showing \(showing), bar \(bar + 1) (\(g.chord(forBar: bar).name))"
+                                let counted = checkBar(g, bar: bar, seed: seed, label: label)
                                 bars += 1
-                                notes += played.hits.count
-                                check(played.hits == g.hits(forBar: bar, seed: seed), "\(label): hits are the bar's layers")
-                                check(BluesBacking(groove: g, seed: seed).hits(forBar: bar) == played.hits, "\(label): the backing plays the bar")
-
-                                for hit in played.hits {
-                                    check((0..<end).contains(hit.beat), "\(label): beat \(hit.beat)")
-                                    check(hit.beats > 0.01 && hit.beat + hit.beats <= end + 0.001, "\(label): \(hit.beats) beats from \(hit.beat)")
-                                    check((40...88).contains(hit.midi), "\(label): midi \(hit.midi)")
-                                    check(hit.gain > 0 && hit.gain <= 1, "\(label): gain \(hit.gain)")
-                                    check((0..<0.2).contains(hit.roll), "\(label): roll \(hit.roll)")
-                                }
-
-                                // Bass: low, and on the chord, the boogie's 6th and ♭7th and a minor walk's 4th aside.
-                                let lowRoot = SoloGroove.lowRoot(of: chord)
-                                let passing = Set([5, 9, 10].map { (lowRoot + $0) % 12 })
-                                for hit in played.bass {
-                                    check((lowRoot...(lowRoot + 12)).contains(hit.midi), "\(label): bass \(hit.midi) is by the root \(lowRoot)")
-                                    check(chord.pitchClasses.contains(hit.midi % 12) || passing.contains(hit.midi % 12),
-                                          "\(label): bass \(hit.midi) isn't in \(chord.name)")
-                                }
-                                if !played.bass.isEmpty {
-                                    check(played.bass.contains { $0.beat == 0 && $0.midi == lowRoot }, "\(label): the root on beat 1")
-                                }
-
-                                // Chords: the chord's own notes, and none inside a fill.
-                                for hit in played.stabs {
-                                    check(chord.pitchClasses.contains(hit.midi % 12), "\(label): stab \(hit.midi) isn't in \(chord.name)")
-                                    if let span = played.fillSpan {
-                                        check(!span.contains(hit.beat), "\(label): a chord at \(hit.beat) inside the fill \(span)")
-                                    }
-                                }
-
-                                checkFill(played, in: g, bar: bar, seed: seed, chord: chord, label: label)
-
-                                // Not too many notes ringing at once (AudioPlayer keeps 24).
-                                for t in Set(played.hits.map(\.beat)) {
-                                    let ringing = played.hits.filter { $0.beat <= t && t < $0.beat + $0.beats }.count
-                                    maxRinging = max(maxRinging, ringing)
-                                    check(ringing <= 18, "\(label): \(ringing) ringing at beat \(t)")
-                                }
+                                notes += counted.notes
+                                maxRinging = max(maxRinging, counted.ringing)
                             }
                         }
                     }
@@ -295,6 +258,54 @@ struct BluesBuddyCheck {
             }
         }
         print("ok   every form, feel, key and mix of switches: \(bars) bars, \(notes) notes, at most \(maxRinging) ringing")
+    }
+
+    /// One bar of one take is playable. Returns how many notes it has and the most ringing at once.
+    static func checkBar(_ g: BluesGroove, bar: Int, seed: UInt64, label: String) -> (notes: Int, ringing: Int) {
+        let end = Double(BluesGroove.beatsPerBar)
+        let chord = g.chord(forBar: bar)
+        let played = g.bar(bar, seed: seed)
+        var maxRinging = 0
+        check(played.hits == g.hits(forBar: bar, seed: seed), "\(label): hits are the bar's layers")
+        check(BluesBacking(groove: g, seed: seed).hits(forBar: bar) == played.hits, "\(label): the backing plays the bar")
+
+        for hit in played.hits {
+            check((0..<end).contains(hit.beat), "\(label): beat \(hit.beat)")
+            check(hit.beats > 0.01 && hit.beat + hit.beats <= end + 0.001, "\(label): \(hit.beats) beats from \(hit.beat)")
+            check((40...88).contains(hit.midi), "\(label): midi \(hit.midi)")
+            check(hit.gain > 0 && hit.gain <= 1, "\(label): gain \(hit.gain)")
+            check((0..<0.2).contains(hit.roll), "\(label): roll \(hit.roll)")
+        }
+
+        // Bass: low, and on the chord, the boogie's 6th and ♭7th and a minor walk's 4th aside.
+        let lowRoot = SoloGroove.lowRoot(of: chord)
+        let passing = Set([5, 9, 10].map { (lowRoot + $0) % 12 })
+        for hit in played.bass {
+            check((lowRoot...(lowRoot + 12)).contains(hit.midi), "\(label): bass \(hit.midi) is by the root \(lowRoot)")
+            check(chord.pitchClasses.contains(hit.midi % 12) || passing.contains(hit.midi % 12),
+                  "\(label): bass \(hit.midi) isn't in \(chord.name)")
+        }
+        if !played.bass.isEmpty {
+            check(played.bass.contains { $0.beat == 0 && $0.midi == lowRoot }, "\(label): the root on beat 1")
+        }
+
+        // Chords: the chord's own notes, and none inside a fill.
+        for hit in played.stabs {
+            check(chord.pitchClasses.contains(hit.midi % 12), "\(label): stab \(hit.midi) isn't in \(chord.name)")
+            if let span = played.fillSpan {
+                check(!span.contains(hit.beat), "\(label): a chord at \(hit.beat) inside the fill \(span)")
+            }
+        }
+
+        checkFill(played, in: g, bar: bar, seed: seed, chord: chord, label: label)
+
+        // Not too many notes ringing at once (AudioPlayer keeps 24).
+        for t in Set(played.hits.map(\.beat)) {
+            let ringing = played.hits.filter { $0.beat <= t && t < $0.beat + $0.beats }.count
+            maxRinging = max(maxRinging, ringing)
+            check(ringing <= 18, "\(label): \(ringing) ringing at beat \(t)")
+        }
+        return (played.hits.count, maxRinging)
     }
 
     static func checkFill(_ played: BluesGroove.Bar, in g: BluesGroove, bar: Int, seed: UInt64,
@@ -333,12 +344,21 @@ struct BluesBuddyCheck {
 
         // A fill: in the bar's scale (the curl's major 3rd aside), starting where its span does
         // and ending on a note of the chord. The scale, worked out here from the settings:
+        // The key's major pentatonic goes with a chord that has the key's major 3rd and not its
+        // minor 3rd (of the form's chords, the I); a diminished or augmented chord has no
+        // pentatonic of its own.
         let chordRoot = chord.root.note.rawValue
-        let onTonicChord = g.form.degrees[g.index(ofBar: bar)] == 1
+        let keyRoot = g.keyRoot.rawValue
+        func has(_ step: Int, above root: Int) -> Bool { chord.pitchClasses.contains((root + step) % 12) }
+        let onTonicChord = has(4, above: keyRoot) && !has(3, above: keyRoot)
+        let noPentatonic = (has(3, above: chordRoot) && has(6, above: chordRoot)) || (has(4, above: chordRoot) && has(8, above: chordRoot))
         let minorSteps: Set<Int> = [0, 3, 5, 7, 10], majorSteps: Set<Int> = [0, 2, 4, 7, 9]
         let scaleRoot: Int
         var allowed: [Set<Int>]   // any one of these, for the whole fill
-        if g.followsChords && (g.isMinor || g.followRule == .chord) {
+        if g.followsChords && (g.isMinor || g.followRule == .chord) && noPentatonic {
+            scaleRoot = keyRoot
+            allowed = [minorSteps]
+        } else if g.followsChords && (g.isMinor || g.followRule == .chord) {
             scaleRoot = chordRoot
             allowed = [chord.pitchClasses.contains((chordRoot + 3) % 12) ? minorSteps : majorSteps]
         } else if g.followsChords {
@@ -693,6 +713,169 @@ struct BluesBuddyCheck {
         check(SavedBluesGrooves.loadCurrent(defaults) == first.playable, "the groove playing is remembered")
         defaults.removePersistentDomain(forName: "blues-buddy-check")
         print("ok   presets: \(BluesPreset.all.map(\.name).joined(separator: ", ")); saving")
+    }
+
+    // MARK: Chords you change
+
+    /// Everything the chord picker offers in a major or minor blues.
+    static func pickerChords(isMinor: Bool) -> [ChordSymbol] {
+        BluesGroove.bluesChords(isMinor: isMinor)
+            + (1...7).map { ChordSymbol(degree: $0) }
+            + (1...7).map { ChordSymbol(degree: $0, kind: .seventh) }
+            + CompositionChord.borrowed(isMinor: isMinor).flatMap { [$0.chord, $0.seventh] }
+    }
+
+    static func checkChangedChords() {
+        let sharpFourDim = ChordSymbol(degree: 4, shift: 1, kind: .diminished7)
+        let toTwo = ChordSymbol(degree: 5, kind: .dominant7, secondary: 2)
+        let two = ChordSymbol(degree: 2, kind: .minor7)
+
+        let plain = BluesGroove(keyRoot: .a, form: .twelveBar)
+        var g = plain
+        check(g.changes.isEmpty && (0..<12).allSatisfy { !g.isChanged(bar: $0) }, "nothing changed to start with")
+        g.setChord(sharpFourDim, atBar: 5)
+        g.setChord(toTwo, atBar: 7)
+        g.setChord(two, atBar: 8)
+        let names = g.chords.map(\.name)
+        let kept = [0, 1, 2, 3, 4, 6, 8, 9, 10, 11].map { names[$0] }
+        check(kept == ["A7", "A7", "A7", "A7", "D7", "A7", "Bm7", "D7", "A7", "E7"], "a jazzier 12-bar in A: \(names)")
+        check(g.chord(forBar: 5).pitchClasses == [3, 6, 9, 0] && g.chord(forBar: 5).kind == .diminished7, "♯iv°7 in A is D♯°7: \(names[5])")
+        check(g.chord(forBar: 7).root.note == .fSharp && g.chord(forBar: 7).kind == .dominant7, "V7/ii in A is F♯7: \(names[7])")
+        check(g.changes.count == 3 && (0..<24).allSatisfy { g.isChanged(bar: $0) == [5, 7, 8].contains($0 % 12) }, "three bars changed, each time round")
+        check(g.chord(forBar: 17) == g.chord(forBar: 5) && g.symbol(forBar: 20) == two, "the changes come round with the form")
+        check(g.formSymbol(forBar: 5) == plain.symbol(forBar: 5) && g.formSymbol(forBar: 8) == plain.symbol(forBar: 8), "the form's own chords are still known")
+        check(!g.sameMusic(as: plain) && !BluesPreset.all[0].groove.sameMusic(as: g), "changed chords are different music")
+
+        // They're in the key's terms: another key moves them.
+        var inC = g
+        inC.keyRoot = .c
+        check(inC.chord(forBar: 8).name == "Dm7" && inC.chord(forBar: 7).name == "A7" && inC.chord(forBar: 5).root.note == .fSharp,
+              "the same changes in C: \(inC.chords.map(\.name))")
+
+        // The form's own chord, or nil, puts a bar back; a chord goes in in root position.
+        var back = g
+        back.setChord(ChordSymbol(degree: 4, kind: .dominant7), atBar: 5)
+        back.setChord(nil, atBar: 7)
+        check(back.changes == [8: two], "the form's chord or nil puts it back: \(back.changes)")
+        back.setChord(ChordSymbol(degree: 4, kind: .dominant7, inversion: 1), atBar: 0)
+        check(back.symbol(forBar: 0) == ChordSymbol(degree: 4, kind: .dominant7) && back.isChanged(bar: 0), "root position")
+        back.setChord(two, atBar: 12)
+        back.setChord(two, atBar: -1)
+        back.setChord(ChordSymbol(degree: 9), atBar: 3)
+        check(back.changes.count == 2 && !back.isChanged(bar: 3), "no bar 13, and no chord on a 9th degree")
+        back.resetChords()
+        check(back == plain, "reset is the plain form")
+        // Another form has its own bars.
+        var other = g
+        other.form = .quickChange
+        check(other == BluesGroove(keyRoot: .a, form: .quickChange), "another form drops the changes")
+        other = g
+        other.form = .twelveBar
+        check(other == g, "the same form keeps them")
+        // One chord can be changed too.
+        var vamp = BluesGroove(keyRoot: .e, form: .vamp)
+        vamp.setChord(ChordSymbol(degree: 1, kind: .minor7), atBar: 0)
+        check(vamp.chords.map(\.name) == ["Em7"] && vamp.chord(forBar: 7).name == "Em7", "a minor vamp: \(vamp.chords.map(\.name))")
+
+        // Saving.
+        let data = try! JSONEncoder().encode(g)
+        check(try! JSONDecoder().decode(BluesGroove.self, from: data) == g, "changed chords save and load")
+        check(BluesGroove(keyRoot: .a, form: .twelveBar, changes: [5: sharpFourDim, 7: toTwo, 8: two]) == g, "or come with the groove")
+        check(BluesGroove(form: .eightBar, changes: [9: two, 2: two, 3: ChordSymbol(degree: 4, kind: .dominant7)]).changes == [2: two],
+              "changes that don't fit the form are dropped")
+        let saved = SavedBlues(name: "Jazzy", groove: g)
+        check(saved.playable.changes == g.changes && saved.playable.sameMusic(as: g), "a saved groove keeps its chords")
+
+        // Following the chords goes by the chord that's there now. On the key's root: the major
+        // pentatonic where the chord has the key's major 3rd and not its minor 3rd (F♯7 has C♯;
+        // D♯°7 has C; Bm7 neither).
+        var follow = g
+        follow.followsChords = true
+        follow.followRule = .tonic
+        let shown = (0..<12).map { follow.shownScale(forBar: $0) }
+        check(shown.allSatisfy { $0.root == .a }, "the tonic rule stays on the root")
+        check(shown.map(\.scale) == [.major, .major, .major, .major, .minor, .minor, .major, .major, .minor, .minor, .major, .minor],
+              "the tonic rule with changed chords: \(shown.map(\.scale))")
+        follow.followRule = .chord
+        check(follow.shownScale(forBar: 7).root == .fSharp && follow.shownScale(forBar: 7).scale == .major, "F♯7's own: \(follow.shownScale(forBar: 7).name)")
+        check(follow.shownScale(forBar: 8).name == "B minor pentatonic", "Bm7's own: \(follow.shownScale(forBar: 8).name)")
+        check(follow.shownScale(forBar: 5).name == "A minor pentatonic", "a diminished chord has none of its own: \(follow.shownScale(forBar: 5).name)")
+        check(follow.shownScale(forBar: 4).name == "D major pentatonic", "and the form's chords as before")
+
+        // The turnaround walks from I down to the V chord's 5th: not if either bar is changed.
+        for bar in [10, 11] {
+            var changed = plain
+            changed.setChord(two, atBar: bar)
+            check((0..<2_400).allSatisfy { !changed.bar($0, seed: 11).isTurnaround && !changed.startsTurnaround(atBar: $0, seed: 11) },
+                  "no turnaround with bar \(bar + 1) changed")
+        }
+        var early = plain
+        early.setChord(two, atBar: 3)
+        check((0..<2_400).contains { early.bar($0, seed: 11).isTurnaround }, "a change elsewhere leaves the turnaround")
+
+        // Every chord the picker offers, in every key: spelled, with a shape, and it goes in.
+        var offered = 0
+        for isMinor in [false, true] {
+            let form: BluesForm = isMinor ? .minorTwelveBar : .twelveBar
+            let symbols = pickerChords(isMinor: isMinor)
+            let blues = BluesGroove.bluesChords(isMinor: isMinor)
+            check(Set(blues).count == blues.count && blues.count >= 6, "\(form): the blues chords")
+            for root in Note.allCases {
+                let key = BluesGroove(keyRoot: root, form: form)
+                check(Set(key.chords.map(\.name)).isSubset(of: Set(blues.map { key.chord($0).name })), "\(key.keyName): the form's chords are among the blues chords")
+                check(Set(blues.map { key.chord($0).name }).count == blues.count, "\(key.keyName): the blues chords differ")
+                for symbol in symbols {
+                    let chord = key.chord(symbol)
+                    offered += 1
+                    check(symbol.isValid && !chord.name.isEmpty && !chord.romanNumeral.isEmpty, "\(key.keyName): \(symbol)")
+                    check(SoloGroove.shape(for: chord).count >= 3, "\(key.keyName) \(chord.name): a shape")
+                    var with = key
+                    with.setChord(symbol, atBar: 2)
+                    check(with.chord(forBar: 2).name == chord.name, "\(key.keyName): \(chord.name) in bar 3 is \(with.chord(forBar: 2).name)")
+                    check(with.isChanged(bar: 2) == (chord.name != key.chord(forBar: 2).name), "\(key.keyName): \(chord.name) counts as a change only if it is one")
+                }
+            }
+        }
+
+        // And grooves with a handful of bars changed at random are playable, bar by bar,
+        // whatever shows and whichever mode.
+        var bars = 0, notes = 0, maxRinging = 0, boards = 0
+        var state: UInt64 = 0x9E3779B97F4A7C15
+        func roll(_ count: Int) -> Int {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return Int((state >> 33) % UInt64(count))
+        }
+        for form in BluesForm.allCases {
+            let symbols = pickerChords(isMinor: form.isMinor)
+            for feel in BluesFeel.allCases {
+                for root in Note.allCases {
+                    for (v, showing) in showings.enumerated() {
+                        for take in 0..<4 {
+                            var g = BluesGroove(keyRoot: root, form: form, feel: feel, scale: showing.scale,
+                                                followsChords: showing.rule != nil, followRule: showing.rule ?? .tonic,
+                                                mode: take == 3 ? .trade : .jam)
+                            for _ in 0..<(form == .vamp ? 1 : 5) {
+                                g.setChord(symbols[roll(symbols.count)], atBar: roll(g.barCount))
+                            }
+                            let seed = UInt64(bars) &* 104_729 &+ UInt64(v)
+                            for bar in 0..<(g.barCount * 2) {
+                                let label = "changed \(form) \(feel) in \(g.keyName), showing \(showing), take \(take), bar \(bar + 1) (\(g.chord(forBar: bar).name))"
+                                let counted = checkBar(g, bar: bar, seed: seed, label: label)
+                                bars += 1
+                                notes += counted.notes
+                                maxRinging = max(maxRinging, counted.ringing)
+                                if take == 0 {
+                                    let board = g.fretboard(position: 1 + bar % 5, bar: bar)
+                                    boards += 1
+                                    check(board.marks.count >= 10 && !board.roots.isEmpty, "\(label): \(board.marks.count) dots showing")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        print("ok   changed chords: \(offered) offered; \(bars) bars with changes, \(notes) notes, at most \(maxRinging) ringing, \(boards) fretboards")
     }
 
     // MARK: From Solo Buddy
