@@ -8,7 +8,7 @@
 //  and never the same twice (every Play is a new take: see BluesGroove). The Grooves button at
 //  the top names the groove playing and opens the Grooves sheet (save it, pick one of yours or
 //  a preset). Under it: the chord you're on and the next one, the form's bars with the one
-//  playing lit, what to solo with (the minor or major pentatonic, the blues scale, or both
+//  playing lit (tap a bar to put another chord in it), what to solo with (the minor or major pentatonic, the blues scale, or both
 //  pentatonics at once, in one part of the neck; or Follow the Chords, which changes it bar by
 //  bar), and the settings. In Trade Licks it plays a lick, each note lighting up on the
 //  fretboard as it sounds, then comps while you answer; the card says whose turn it is. The
@@ -28,7 +28,13 @@ struct BluesBuddyView: View {
     @AppStorage("bluesBuddy.click") private var clicks = false
     @AppStorage("bluesBuddy.position") private var position = 1
     @State private var showGrooves = false
+    /// The bar whose chord is being changed.
+    @State private var editingBar: EditedBar? = nil
     @Environment(\.scenePhase) private var scenePhase
+
+    private struct EditedBar: Identifiable {
+        let id: Int
+    }
 
     var body: some View {
         NavigationContainer {
@@ -50,6 +56,12 @@ struct BluesBuddyView: View {
             .sheet(isPresented: $showGrooves) {
                 BluesGroovesSheet(groove: groove, saved: $saved) { picked in
                     withAnimation(.easeInOut(duration: 0.2)) { groove = picked }
+                }
+            }
+            .sheet(item: $editingBar) { edited in
+                BluesChordPicker(groove: groove, bar: edited.id) { symbol in
+                    withAnimation(.easeInOut(duration: 0.2)) { groove.setChord(symbol, atBar: edited.id) }
+                    editingBar = nil
                 }
             }
             .onAppear {
@@ -210,40 +222,72 @@ struct BluesBuddyView: View {
 
     // MARK: - Form
 
-    /// The form's bars in lines of four, the one playing lit (nothing to chart on one chord).
+    /// The form's bars in lines of four, the one playing lit. Tap a bar to change its chord;
+    /// the ones you've changed are marked.
     @ViewBuilder
     private var formChart: some View {
         let chords = groove.chords
-        if chords.count > 1 {
-            let playing: Int? = track.isPlaying && !track.isCountingIn ? track.bar.map({ groove.index(ofBar: $0) }) : nil
-            VStack(spacing: 6) {
-                ForEach(Array(stride(from: 0, to: chords.count, by: 4)), id: \.self) { lineStart in
-                    HStack(spacing: 6) {
-                        ForEach(lineStart..<min(lineStart + 4, chords.count), id: \.self) { index in
-                            let chord = chords[index]
-                            let isOn = playing == index
-                            VStack(spacing: 1) {
-                                Text(chord.name)
-                                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
-                                Text(chord.romanNumeral)
-                                    .font(.system(size: 11, weight: .semibold, design: .serif))
-                                    .foregroundStyle(isOn ? .white.opacity(0.85) : .secondary)
-                            }
-                            .foregroundStyle(isOn ? .white : .primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 7)
-                            .background(isOn ? Color.accentColor : Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
+        let playing: Int? = track.isPlaying && !track.isCountingIn ? track.bar.map({ groove.index(ofBar: $0) }) : nil
+        VStack(spacing: 6) {
+            ForEach(Array(stride(from: 0, to: chords.count, by: 4)), id: \.self) { lineStart in
+                HStack(spacing: 6) {
+                    ForEach(lineStart..<min(lineStart + 4, chords.count), id: \.self) { index in
+                        barButton(index, chord: chords[index], isOn: playing == index)
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(groove.form.displayName) blues: " + chords.map(\.name).joined(separator: ", "))
+            HStack(alignment: .firstTextBaseline) {
+                Text(chords.count > 1 ? "Tap a bar to change its chord." : "Tap the chord to change it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if !groove.changes.isEmpty {
+                    Button("Reset to \(groove.form.displayName)") {
+                        withAnimation(.easeInOut(duration: 0.2)) { groove.resetChords() }
+                    }
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .accessibilityHint("Puts the form's own chords back in every bar")
+                }
+            }
+            .padding(.top, 2)
         }
+        .padding(.horizontal, 20)
+    }
+
+    private func barButton(_ index: Int, chord: CompositionChord, isOn: Bool) -> some View {
+        let isChanged = groove.isChanged(bar: index)
+        return Button {
+            editingBar = EditedBar(id: index)
+        } label: {
+            VStack(spacing: 1) {
+                Text(chord.name)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(chord.romanNumeral)
+                    .font(.system(size: 11, weight: .semibold, design: .serif))
+                    .foregroundStyle(isOn ? .white.opacity(0.85) : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .foregroundStyle(isOn ? .white : .primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 2)
+            .background(isOn ? Color.accentColor : Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                if isChanged {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.orange, lineWidth: 1.5)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Bar \(index + 1), \(chord.longName)" + (isChanged ? ", changed" : ""))
+        .accessibilityHint("Changes this bar's chord")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
     // MARK: - Scale
@@ -505,7 +549,7 @@ struct BluesBuddyView: View {
                 }
                 .pickerStyle(.menu)
             }
-            Text(groove.form.detail)
+            Text(groove.changes.isEmpty ? groove.form.detail : changedDetail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, -8)
@@ -557,6 +601,12 @@ struct BluesBuddyView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
+    }
+
+    /// Under Form, once chords are changed.
+    private var changedDetail: String {
+        let count = groove.changes.count
+        return "With your own chord in " + (count == 1 ? "1 bar" : "\(count) bars") + ". Picking a form puts its chords back."
     }
 
     /// The key's tonic as it's spelled in the key: "B♭".
@@ -623,9 +673,10 @@ private struct BluesGroovesSheet: View {
         return BluesPreset.preset(groove.presetID)?.name ?? "My Blues"
     }
 
-    /// "A · 12-Bar · Shuffle · 95 BPM".
+    /// "A · 12-Bar · Shuffle · 95 BPM", or with chords changed, "A · 12-Bar, your chords · …".
     static func detail(of groove: BluesGroove) -> String {
-        "\(groove.keyName) · \(groove.form.displayName) · \(groove.feel.displayName) · \(groove.bpm) BPM"
+        let form = groove.form.displayName + (groove.changes.isEmpty ? "" : ", your chords")
+        return "\(groove.keyName) · \(form) · \(groove.feel.displayName) · \(groove.bpm) BPM"
     }
 
     /// Opened from a saved groove and changed since.
@@ -852,6 +903,96 @@ private struct BluesGroovesSheet: View {
         saved[index].groove = music
         saved[index].savedAt = .now
         saved.sort { $0.savedAt > $1.savedAt }
+    }
+}
+
+// MARK: - BluesChordPicker
+
+/// Pick the chord for one bar of the form: the blues's own chords and the ones players swap
+/// in, the key's chords and 7ths, and borrowed and secondary chords. `onPick(nil)` puts the
+/// form's chord back.
+private struct BluesChordPicker: View {
+
+    let groove: BluesGroove
+    let bar: Int
+    let onPick: (ChordSymbol?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var current: CompositionChord { groove.chord(forBar: bar) }
+    private var original: CompositionChord { groove.chord(groove.formSymbol(forBar: bar)) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if groove.isChanged(bar: bar) {
+                        Button {
+                            onPick(nil)
+                        } label: {
+                            Label("Put \(original.name) Back", systemImage: "arrow.uturn.backward")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityHint("The \(groove.form.displayName)'s own chord for this bar")
+                    }
+                    section("Blues Chords", BluesGroove.bluesChords(isMinor: groove.isMinor))
+                    section("Chords in \(groove.keyName)", (1...7).map { ChordSymbol(degree: $0) })
+                    section("7th Chords", (1...7).map { ChordSymbol(degree: $0, kind: .seventh) })
+                    section("Borrowed & Secondary", CompositionChord.borrowed(isMinor: groove.isMinor).flatMap { [$0.chord, $0.seventh] })
+                    Text("The bass, the chords, the fills and Follow the Chords all go by the chord you pick.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(20)
+            }
+            .navigationTitle(groove.barCount > 1 ? "Chord for Bar \(bar + 1)" : "Change Chord")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func section(_ title: String, _ symbols: [ChordSymbol]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+                ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
+                    let chord = groove.chord(symbol)
+                    let isCurrent = chord.name == current.name
+                    Button {
+                        onPick(symbol)
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text(chord.romanNumeral)
+                                .font(.system(size: 15, weight: .bold, design: .serif))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                            Text(chord.name)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(isCurrent ? .white.opacity(0.85) : .secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
+                        .foregroundStyle(isCurrent ? .white : .primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .padding(.horizontal, 2)
+                        .background(isCurrent ? Color.accentColor : Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(chord.longName)
+                    .accessibilityAddTraits(isCurrent ? .isSelected : [])
+                }
+            }
+        }
     }
 }
 

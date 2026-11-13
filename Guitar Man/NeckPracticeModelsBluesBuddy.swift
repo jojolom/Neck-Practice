@@ -13,6 +13,9 @@
 //  with the notes that differ told apart. Or it follows the chords (`followsChords`), changing
 //  with each bar by one of two rules. Fills are made from what's showing.
 //
+//  Any bar's chord can be changed (`changes`, set with `setChord(_:atBar:)`): the bass, the
+//  chords, the fills and the scale that follows all go by the chord the bar has now.
+//
 //  Trade Licks (`mode == .trade`) is call and response: Blues Buddy plays a lick for one, two
 //  or four bars over a quiet backing, then comps for as long while you answer. Its licks are
 //  made from the dots showing, on the top four strings, so each note can light up on the
@@ -192,7 +195,13 @@ enum BluesMode: String, Codable, CaseIterable, Identifiable {
 /// Everything Blues Buddy plays, and the scale it shows. Saved between visits.
 struct BluesGroove: Codable, Equatable {
     var keyRoot: Note = .a
-    var form: BluesForm = .twelveBar
+    /// Picking another form drops the chords you changed: they belonged to the old one's bars.
+    var form: BluesForm = .twelveBar {
+        didSet { if form != oldValue { changes = [:] } }
+    }
+    /// The bars whose chord you changed from the form's, by their place in the form (from 0).
+    /// Chords are named in the key's terms, so they move with the key.
+    private(set) var changes: [Int: ChordSymbol] = [:]
     var feel: BluesFeel = .shuffle
     var bpm = 95
     /// What it plays. With all three off it still picks the bass.
@@ -219,7 +228,8 @@ struct BluesGroove: Codable, Equatable {
     init(keyRoot: Note = .a, form: BluesForm = .twelveBar, feel: BluesFeel = .shuffle, bpm: Int? = nil,
          bassPicking: Bool = true, chordStabs: Bool = true, fills: Bool = true,
          scale: BluesScale = .minor, followsChords: Bool = false, followRule: BluesFollowRule = .tonic,
-         mode: BluesMode = .jam, tradeBars: Int = 2, presetID: String? = nil, savedID: UUID? = nil) {
+         mode: BluesMode = .jam, tradeBars: Int = 2, changes: [Int: ChordSymbol] = [:],
+         presetID: String? = nil, savedID: UUID? = nil) {
         self.keyRoot = keyRoot
         self.form = form
         self.feel = feel
@@ -234,11 +244,12 @@ struct BluesGroove: Codable, Equatable {
         self.tradeBars = Self.tradeLengths.contains(tradeBars) ? tradeBars : 2
         self.presetID = presetID
         self.savedID = savedID
+        for (index, symbol) in changes { setChord(symbol, atBar: index) }
     }
 
     private enum CodingKeys: String, CodingKey {
         case keyRoot, form, feel, bpm, bassPicking, chordStabs, fills, scale, followsChords, followRule, mode, tradeBars
-        case presetID, savedID
+        case changes, presetID, savedID
     }
 
     /// Every field has a default, so a groove saved by an older version still loads.
@@ -260,9 +271,11 @@ struct BluesGroove: Codable, Equatable {
         tradeBars = Self.tradeLengths.contains(bars) ? bars : 2
         presetID = try? c.decodeIfPresent(String.self, forKey: .presetID)
         savedID = try? c.decodeIfPresent(UUID.self, forKey: .savedID)
+        let changed = (try? c.decodeIfPresent([Int: ChordSymbol].self, forKey: .changes)) ?? [:]
+        for (index, symbol) in changed { setChord(symbol, atBar: index) }
     }
 
-    /// The same music (key, form, feel, tempo, what plays, what shows), wherever it came from.
+    /// The same music (key, form, chords, feel, tempo, what plays, what shows), wherever it came from.
     func sameMusic(as other: BluesGroove) -> Bool {
         var a = self, b = other
         a.presetID = nil; a.savedID = nil
@@ -289,14 +302,61 @@ struct BluesGroove: Codable, Equatable {
     /// Where bar `bar` falls in the form (bars count on through the repeats).
     func index(ofBar bar: Int) -> Int { ((bar % barCount) + barCount) % barCount }
 
-    /// The chord of bar `bar`: dominant 7ths, or in a minor blues i7, iv7 and a dominant V7.
-    func symbol(forBar bar: Int) -> ChordSymbol {
+    /// The form's own chord for bar `bar`: dominant 7ths, or in a minor blues i7, iv7 and a
+    /// dominant V7.
+    func formSymbol(forBar bar: Int) -> ChordSymbol {
         let degree = form.degrees[index(ofBar: bar)]
         return ChordSymbol(degree: degree, kind: isMinor && degree != 5 ? .minor7 : .dominant7)
     }
 
-    func chord(forBar bar: Int) -> CompositionChord {
-        CompositionChord(symbol: symbol(forBar: bar), keySignature: keySignature, isMinor: isMinor)
+    /// The chord of bar `bar`: the one you put there, or the form's.
+    func symbol(forBar bar: Int) -> ChordSymbol {
+        changes[index(ofBar: bar)] ?? formSymbol(forBar: bar)
+    }
+
+    /// `symbol` spelled in the groove's key.
+    func chord(_ symbol: ChordSymbol) -> CompositionChord {
+        CompositionChord(symbol: symbol, keySignature: keySignature, isMinor: isMinor)
+    }
+
+    func chord(forBar bar: Int) -> CompositionChord { chord(symbol(forBar: bar)) }
+
+    /// Whether bar `bar`'s chord is one you changed.
+    func isChanged(bar: Int) -> Bool { changes[index(ofBar: bar)] != nil }
+
+    /// Puts `symbol` in bar `bar` (every time the form comes round), in root position. Nil,
+    /// or the chord the form has there anyway, puts the form's chord back.
+    mutating func setChord(_ symbol: ChordSymbol?, atBar bar: Int) {
+        guard (0..<barCount).contains(bar) else { return }
+        guard let symbol = symbol?.rootPosition, symbol.isValid,
+              chord(symbol).name != chord(formSymbol(forBar: bar)).name else {
+            changes[bar] = nil
+            return
+        }
+        changes[bar] = symbol
+    }
+
+    /// Every bar back to the form's own chord.
+    mutating func resetChords() { changes = [:] }
+
+    /// The chords the picker offers first: the blues's own three, and the ones blues players
+    /// swap in (in major the ♯iv°7, ♭VI7, ii7 and the dominants that lead to ii and V; in
+    /// minor the minor v7, ♭VI7, iiø7 and ♭VII7).
+    static func bluesChords(isMinor: Bool) -> [ChordSymbol] {
+        if isMinor {
+            return [
+                ChordSymbol(degree: 1, kind: .minor7), ChordSymbol(degree: 4, kind: .minor7),
+                ChordSymbol(degree: 5, kind: .dominant7), ChordSymbol(degree: 5, kind: .minor7),
+                ChordSymbol(degree: 6, kind: .dominant7), ChordSymbol(degree: 2, kind: .halfDiminished7),
+                ChordSymbol(degree: 7, kind: .dominant7),
+            ]
+        }
+        return [
+            ChordSymbol(degree: 1, kind: .dominant7), ChordSymbol(degree: 4, kind: .dominant7),
+            ChordSymbol(degree: 5, kind: .dominant7), ChordSymbol(degree: 4, shift: 1, kind: .diminished7),
+            ChordSymbol(degree: 6, shift: -1, kind: .dominant7), ChordSymbol(degree: 2, kind: .minor7),
+            ChordSymbol(degree: 5, kind: .dominant7, secondary: 2), ChordSymbol(degree: 5, kind: .dominant7, secondary: 5),
+        ]
     }
 
     /// One time through, bar by bar.
@@ -357,16 +417,28 @@ extension BluesGroove {
     /// minor pentatonic anyway, so the other rule would never change).
     var activeFollowRule: BluesFollowRule { isMinor ? .chord : followRule }
 
+    /// Whether the key's major pentatonic suits bar `bar`'s chord: the chord has the key's
+    /// major 3rd and not its minor 3rd. That's the I chord of a blues and not its IV7 (which
+    /// has the ♭3) or V7 (which has neither); of chords you put in, VI7 and iii7 take it too.
+    func takesMajorPentatonic(bar: Int) -> Bool {
+        let notes = chord(forBar: bar).pitchClasses
+        return notes.contains((keyRoot.rawValue + 4) % 12) && !notes.contains((keyRoot.rawValue + 3) % 12)
+    }
+
     /// What the fretboard shows over bar `bar`: the scale picked, or, following the chords,
     /// the one the rule gives that bar's chord.
     func shownScale(forBar bar: Int) -> ScaleChoice {
-        guard followsChords else { return ScaleChoice(root: keyRoot, rootName: tonicName, scale: scale) }
+        let onKey = ScaleChoice(root: keyRoot, rootName: tonicName, scale: scale)
+        guard followsChords else { return onKey }
         switch activeFollowRule {
         case .tonic:
-            let onTonicChord = form.degrees[index(ofBar: bar)] == 1
-            return ScaleChoice(root: keyRoot, rootName: tonicName, scale: onTonicChord ? .major : .minor)
+            return ScaleChoice(root: keyRoot, rootName: tonicName, scale: takesMajorPentatonic(bar: bar) ? .major : .minor)
         case .chord:
             let chord = chord(forBar: bar)
+            // A diminished or augmented chord has no pentatonic of its own: the key's minor one.
+            if chord.quality == .diminished || chord.kind == .augmented {
+                return ScaleChoice(root: keyRoot, rootName: tonicName, scale: .minor)
+            }
             return ScaleChoice(root: chord.root.note, rootName: chord.root.name,
                                scale: chord.quality == .minor ? .minor : .major)
         }
@@ -618,13 +690,14 @@ extension BluesGroove {
     // MARK: Licks
 
     /// The scale a lick in bar `bar` is made from: what's showing. Of Both it's one or the
-    /// other for the whole turn (the minor one over IV and V).
+    /// other for the whole turn (the minor one over IV and V, and any chord the major one
+    /// doesn't suit).
     func lickScale(forBar bar: Int, seed: UInt64) -> ScaleChoice {
         var choice = shownScale(forBar: bar)
         if choice.scale == .both {
             var dice = BluesDice(seed: seed, bar: turnStart(ofBar: bar), layer: .scale)
             let major = dice.chance(0.5)
-            choice.scale = major && form.degrees[index(ofBar: bar)] == 1 ? .major : .minor
+            choice.scale = major && takesMajorPentatonic(bar: bar) ? .major : .minor
         }
         return choice
     }
@@ -736,7 +809,19 @@ extension BluesGroove {
     private func bass(forBar bar: Int, seed: UInt64, chord: CompositionChord, thinFrom: Int?) -> [Hit] {
         let root = SoloGroove.lowRoot(of: chord)
         let fifth = SoloGroove.fifth(of: chord, above: root)
-        let isMinorChord = chord.quality == .minor
+        // The chord's own notes above the root, so any chord gets a line that fits it: its
+        // 3rd (a sus chord's 2nd or 4th), and its 7th (a major 7th where it has one, the
+        // diminished 7th's 6th, else the blues's ♭7).
+        let steps = Set(chord.pitchClasses.map { (($0 - chord.root.note.rawValue) % 12 + 12) % 12 })
+        let isMinorChord = chord.quality != .major
+        let third: Int = [4, 3, 5, 2].first { steps.contains($0) } ?? 4
+        var seventh = 10
+        if steps.contains(11) {
+            seventh = 11
+        } else if isMinorChord && steps.contains(9) {
+            seventh = 9
+        }
+        let fifthStep = fifth - root
         var lineDice = BluesDice(seed: seed, bar: Int((Double(bar) / 4).rounded(.down)), layer: .bassLine)
         var pattern = lineDice.pick(bassPatterns)
         // Sometimes the boogie reaches up to the ♭7: 5th, 6th, ♭7th, 6th.
@@ -756,8 +841,8 @@ extension BluesGroove {
             case .boogie:
                 let partner: Int
                 if isMinorChord {
-                    partner = beat % 2 == 0 ? fifth : root + 10
-                } else if reaches {
+                    partner = beat % 2 == 0 ? fifth : root + seventh
+                } else if reaches && seventh == 10 {
                     partner = [fifth, root + 9, root + 10, root + 9][beat]
                 } else {
                     partner = beat % 2 == 0 ? fifth : root + 9
@@ -770,10 +855,12 @@ extension BluesGroove {
             case .walk:
                 if feel == .slow {
                     // A note a beat.
-                    let line = isMinorChord ? [0, 3, 7, 10] : [0, 4, 7, 9]
+                    let line = isMinorChord ? [0, third, fifthStep, seventh] : [0, third, fifthStep, 9]
                     hits.append(Hit(beat: at, midi: root + line[beat], beats: 0.9, gain: beat == 0 ? 0.7 : 0.6))
                 } else {
-                    let line = isMinorChord ? [0, 3, 5, 7, 10, 7, 5, 3] : [0, 4, 7, 9, 10, 9, 7, 4]
+                    let line = isMinorChord
+                        ? [0, third, 5, fifthStep, seventh, fifthStep, 5, third]
+                        : [0, third, fifthStep, 9, seventh, 9, fifthStep, third]
                     hits.append(Hit(beat: at, midi: root + line[beat * 2], beats: off * 0.9, gain: beat == 0 ? 0.7 : 0.62))
                     hits.append(Hit(beat: at + off, midi: root + line[beat * 2 + 1], beats: (1 - off) * 0.9, gain: 0.5))
                 }
@@ -843,14 +930,14 @@ extension BluesGroove {
 
     /// The scale a fill in bar `bar` is made from. Following the chords, it's the one showing.
     /// Otherwise it's the one showing while the I chord plays (one or the other of Both), and
-    /// over IV and V the minor pentatonic, where the major one's 3rd would clash. The blues
-    /// scale suits all three.
+    /// over IV and V the minor pentatonic, where the major one's 3rd would clash (a chord you
+    /// put in goes by `takesMajorPentatonic`). The blues scale suits all three.
     func fillScale(forBar bar: Int, seed: UInt64) -> ScaleChoice {
         if followsChords { return shownScale(forBar: bar) }
         var choice = ScaleChoice(root: keyRoot, rootName: tonicName, scale: .minor)
         if scale == .blues {
             choice.scale = .blues
-        } else if !isMinor && form.degrees[index(ofBar: bar)] == 1 {
+        } else if !isMinor && takesMajorPentatonic(bar: bar) {
             switch scale {
             case .major:
                 choice.scale = .major
@@ -878,8 +965,10 @@ extension BluesGroove {
     }
 
     /// Whether bar `bar` plays the turnaround: the bar of I before the last, half the time.
+    /// Not if you changed that bar or the last: the walk down is from I to the V chord's 5th.
     func startsTurnaround(atBar bar: Int, seed: UInt64) -> Bool {
-        guard plays.fills, form != .vamp, index(ofBar: bar) == barCount - 2 else { return false }
+        guard plays.fills, form != .vamp, index(ofBar: bar) == barCount - 2,
+              changes[barCount - 2] == nil, changes[barCount - 1] == nil else { return false }
         var dice = BluesDice(seed: seed, bar: bar, layer: .turnaround)
         return dice.chance(0.5)
     }
