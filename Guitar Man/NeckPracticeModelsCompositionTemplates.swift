@@ -2,7 +2,8 @@
 //  CompositionTemplates.swift
 //  Guitar Man
 //
-//  Progressions to start a composition from (Compose ▸ Start From a Progression). Written as
+//  Progressions to start a composition from (shown among Compose ▸ Examples: see
+//  CompositionExample, which adds tunes with melodies and harder pieces). Written as
 //  Roman numerals, so changing the key afterwards plays the same progression in the new key.
 //
 

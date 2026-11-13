@@ -64,6 +64,11 @@ struct NeckPracticeApp: App {
                 .onDisappear {
                     UIApplication.shared.isIdleTimerDisabled = false
                 }
+                // A composition file (".guitarman") opened from Messages, Mail, Files or AirDrop.
+                .onOpenURL { url in
+                    guard url.isFileURL else { return }
+                    DeepLinkRouter.shared.openCompose(message: CompositionImport.open(url).message)
+                }
         }
         .modelContainer(for: [PracticeSessionLog.self, SavedLoop.self])
     }

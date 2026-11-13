@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7D1E0A4E2F6B4A0100C0FFEE /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 7D1E0A4D2F6B4A0100C0FFEE /* TelemetryDeck */; };
 		2D307D5B1CE964C038026C3B /* ShieldConfiguration.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1F1C142827235C2B1E7556A /* ShieldConfiguration.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7D1E0A4E2F6B4A0100C0FFEE /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 7D1E0A4D2F6B4A0100C0FFEE /* TelemetryDeck */; };
 		C1287297C0BA3D8441FC5DF7 /* ShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 210EB0B79581857EBA3DA2E6 /* ShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E87EA69ECDC9D4854AE5AFB4 /* DeviceActivityMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 137AB1DCEA8C69DB4201CA94 /* DeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -643,6 +643,7 @@
 				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Guitar Man-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Guitar Man";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar Man uses the microphone for the tuner, to record loops, and to hear your chords in Play Along.";
@@ -679,6 +680,7 @@
 				DEVELOPMENT_TEAM = V2RWATZXA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Guitar Man-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Guitar Man";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Guitar Man uses the microphone for the tuner, to record loops, and to hear your chords in Play Along.";

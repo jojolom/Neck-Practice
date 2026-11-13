@@ -376,6 +376,13 @@ struct HomeView: View {
                 .environment(\.providesNavigationStack, true)
                 .onAppear { Analytics.featureOpened(route.analyticsName) }
             }
+            // A composition file was opened from another app: go to Compose, which says what happened.
+            .onChange(of: router.pendingCompose, initial: true) { _, pending in
+                guard pending else { return }
+                router.pendingCompose = false
+                showAbout = false
+                path = NavigationPath([HomeRoute.exercise("Compose")])
+            }
             // A reminder was tapped (or its Start Now action): jump to Daily Practice.
             .onChange(of: router.pendingDailyPractice, initial: true) { _, pending in
                 guard pending else { return }

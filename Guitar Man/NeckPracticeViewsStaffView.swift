@@ -32,6 +32,16 @@ struct StaffColumn: Identifiable {
     /// Notes drawn faded behind this column's own (a chord under a melody note), and how long.
     var ghostPitches: [SpelledPitch] = []
     var ghostValue: NoteValue = .whole
+    /// Where the column sits across the staff, 0–1, instead of its equal share of the width: for
+    /// music laid out by time (the Composition screen's melody, where a sixteenth and a triplet
+    /// each sit where they fall in the measure).
+    var position: CGFloat? = nil
+    /// A small 3 over the column: the middle of a triplet.
+    var tuplet = false
+    /// A tie from this column's notes to the next column that has notes (or, if there's none,
+    /// off the right edge, into the next measure), and one coming in from the left edge.
+    var tieToNext = false
+    var tieFromPrevious = false
 }
 
 struct StaffView: View {
@@ -142,9 +152,35 @@ struct StaffView: View {
         guard !columns.isEmpty else { return }
         let start = edgeToEdge ? 0 : x + s * 0.8
         let slot = max(0, right - start - (edgeToEdge ? 0 : s * 0.4)) / CGFloat(columns.count)
+        func noteX(_ index: Int) -> CGFloat {
+            columns[index].position.map { start + (right - start) * $0 } ?? start + slot * (CGFloat(index) + 0.5)
+        }
         for (i, column) in columns.enumerated() {
-            let noteX = start + slot * (CGFloat(i) + 0.5)
-            drawColumn(column, x: noteX, size: size, in: &context)
+            drawColumn(column, x: noteX(i), size: size, in: &context)
+            guard !column.pitches.isEmpty else { continue }
+            if column.tieToNext {
+                let next = columns.indices.first { $0 > i && !columns[$0].pitches.isEmpty }
+                drawTies(for: column, from: noteX(i) + noteHeadWidth * 0.6,
+                         to: next.map { noteX($0) - noteHeadWidth * 0.6 } ?? right - 1, size: size, in: &context)
+            }
+            if column.tieFromPrevious {
+                drawTies(for: column, from: start + 1, to: noteX(i) - noteHeadWidth * 0.6, size: size, in: &context)
+            }
+        }
+    }
+
+    /// A tie on each of the column's notes between two x's: a shallow curve on the side away from the stem.
+    private func drawTies(for column: StaffColumn, from: CGFloat, to: CGFloat, size: CGSize, in context: inout GraphicsContext) {
+        guard to > from else { return }
+        let positions = column.pitches.map(\.staffPosition)
+        let stemUp = Double((positions.min() ?? 4) + (positions.max() ?? 4)) / 2 < 4
+        let side: CGFloat = stemUp ? 1 : -1
+        for position in positions {
+            let ty = y(position, in: size) + side * lineSpacing * 0.75
+            var tie = Path()
+            tie.move(to: CGPoint(x: from, y: ty))
+            tie.addQuadCurve(to: CGPoint(x: to, y: ty), control: CGPoint(x: (from + to) / 2, y: ty + side * min(lineSpacing * 1.1, (to - from) * 0.35)))
+            context.stroke(tie, with: .color(column.color ?? Color(.label)), style: StrokeStyle(lineWidth: lineSpacing * 0.17, lineCap: .round))
         }
     }
 
@@ -233,17 +269,27 @@ struct StaffView: View {
                     p.addLine(to: CGPoint(x: stemX, y: toY))
                 }, with: .color(ink), lineWidth: 1.2)
 
-                // ── Flag (eighth notes): curling away from the stem's end, toward the note ──
-                if column.value.hasFlag {
+                // ── Flags (one for an eighth, two for a sixteenth): curling away from the stem's
+                // end, toward the note ──
+                for index in 0..<column.value.flags {
                     let dir: CGFloat = stemUp ? 1 : -1
+                    let flagY = toY + dir * CGFloat(index) * s * 0.75
                     var flag = Path()
-                    flag.move(to: CGPoint(x: stemX, y: toY))
-                    flag.addCurve(to: CGPoint(x: stemX + s * 0.85, y: toY + dir * s * 2.3),
-                                  control1: CGPoint(x: stemX + s * 0.1, y: toY + dir * s * 0.9),
-                                  control2: CGPoint(x: stemX + s * 1.25, y: toY + dir * s * 1.2))
+                    flag.move(to: CGPoint(x: stemX, y: flagY))
+                    flag.addCurve(to: CGPoint(x: stemX + s * 0.85, y: flagY + dir * s * 2.3),
+                                  control1: CGPoint(x: stemX + s * 0.1, y: flagY + dir * s * 0.9),
+                                  control2: CGPoint(x: stemX + s * 1.25, y: flagY + dir * s * 1.2))
                     context.stroke(flag, with: .color(ink), style: StrokeStyle(lineWidth: s * 0.24, lineCap: .round))
                 }
             }
+        }
+
+        // ── The 3 of a triplet, just clear of the notes ──
+        if column.tuplet {
+            var top = min(y(8, in: size), positions.isEmpty ? y(8, in: size) : y(highest, in: size))
+            if column.value.hasStem && stemUp && !positions.isEmpty { top = min(top, y(highest, in: size) - stemLength) }
+            context.draw(Text("3").font(.system(size: s * 1.25, weight: .semibold, design: .serif).italic()).foregroundColor(ink),
+                         at: CGPoint(x: x, y: top - s * 0.8), anchor: .center)
         }
 
         // ── Text above / below ──
@@ -290,11 +336,19 @@ struct StaffView: View {
         case .whole, .half:
             let top = value == .whole ? y(6, in: size) : y(4, in: size) - s * 0.5
             context.fill(Path(CGRect(x: x - s * 0.6, y: top, width: s * 1.2, height: s * 0.5)), with: .color(color))
-        case .eighth:
-            // A blob with a tail that slants down to the left.
+        case .eighth, .dottedEighth, .tripletEighth, .sixteenth:
+            // A blob with a tail that slants down to the left (two blobs for a sixteenth).
             let top = y(5, in: size)
             context.fill(Path(ellipseIn: CGRect(x: x - s * 0.55, y: top - s * 0.3, width: s * 0.5, height: s * 0.5)),
                          with: .color(color))
+            if value == .sixteenth {
+                context.fill(Path(ellipseIn: CGRect(x: x - s * 0.75, y: top + s * 0.7, width: s * 0.5, height: s * 0.5)),
+                             with: .color(color))
+                var hook = Path()
+                hook.move(to: CGPoint(x: x - s * 0.6, y: top + s * 1.1))
+                hook.addQuadCurve(to: CGPoint(x: x + s * 0.18, y: top + s * 0.85), control: CGPoint(x: x - s * 0.2, y: top + s * 1.35))
+                context.stroke(hook, with: .color(color), style: StrokeStyle(lineWidth: s * 0.22, lineCap: .round))
+            }
             var p = Path()
             p.move(to: CGPoint(x: x - s * 0.4, y: top + s * 0.1))
             p.addQuadCurve(to: CGPoint(x: x + s * 0.4, y: top - s * 0.15), control: CGPoint(x: x, y: top + s * 0.35))

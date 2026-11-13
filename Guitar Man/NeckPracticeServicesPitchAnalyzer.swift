@@ -29,9 +29,15 @@ struct PitchAnalyzer {
     private static let subharmonicStringToleranceCents: Double = 150
 
     /// Returns the fundamental frequency in Hz, or nil if no confident pitch is found.
-    static func detectFrequency(in samples: [Float], sampleRate: Double) -> Double? {
+    ///
+    /// The tuner's defaults look up to 500 Hz and only take a longer period over the first dip
+    /// when it's near an open string. Hearing notes anywhere on the neck (Compose) passes a
+    /// higher `maxFrequency` and `anyString`, which takes the longer period wherever it's clearly
+    /// better: a low note's overtone has a shorter period that fits less well than its own.
+    static func detectFrequency(in samples: [Float], sampleRate: Double,
+                                maxFrequency: Double = 500, anyString: Bool = false) -> Double? {
         let halfLength = samples.count / 2
-        let minTau = max(2, Int(sampleRate / 600))
+        let minTau = max(2, Int(sampleRate / (maxFrequency * 1.2)))
         let maxTau = min(Int(sampleRate / 60), halfLength - 1)
         guard maxTau > minTau + 8 else { return nil }
 
@@ -73,7 +79,7 @@ struct PitchAnalyzer {
         var chosenTau = bestTau
         var chosenValue = refinedMinimum(diff, at: bestTau, limit: limit).value
         let firstValue = chosenValue
-        for k in 2...3 {
+        for k in 2...(anyString ? 4 : 3) {
             let center = bestTau * k
             let window = max(4, center / 40)
             guard center + window <= limit else { continue }
@@ -84,7 +90,7 @@ struct PitchAnalyzer {
                   candidate < firstValue * subharmonicRatio,
                   candidate < chosenValue else { continue }
             let frequency = sampleRate / Double(m)
-            guard frequency >= 60, isNearOpenString(frequency) else { continue }
+            guard frequency >= 60, anyString || isNearOpenString(frequency) else { continue }
             chosenTau = m
             chosenValue = candidate
         }
@@ -92,7 +98,7 @@ struct PitchAnalyzer {
         let frequency = sampleRate / refinedMinimum(cmndf, at: chosenTau, limit: limit).position
 
         // Sanity check: guitar fundamental range (generous bounds)
-        guard frequency >= 60 && frequency <= 500 else { return nil }
+        guard frequency >= 60 && frequency <= maxFrequency else { return nil }
         return frequency
     }
 

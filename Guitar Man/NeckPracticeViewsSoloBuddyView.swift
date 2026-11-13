@@ -33,6 +33,15 @@ struct SoloBuddyView: View {
     @State private var picking: ChordPick? = nil
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Shown over another screen (Compose): adds a Done button that calls this.
+    private let onClose: (() -> Void)?
+
+    /// Opens on `groove` (one made from a composition, in Compose) rather than the one left last time.
+    init(groove: SoloGroove? = nil, onClose: (() -> Void)? = nil) {
+        if let groove { _groove = State(initialValue: groove) }
+        self.onClose = onClose
+    }
+
     var body: some View {
         NavigationContainer {
             ScrollViewReader { page in
@@ -56,6 +65,13 @@ struct SoloBuddyView: View {
             }
             .safeAreaInset(edge: .bottom) { playBar }
             .navigationTitle("Solo Buddy")
+            .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { onClose() }
+                    }
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $picking) { pick in
                 SoloChordPicker(groove: groove, slot: pick.slot) { symbol in

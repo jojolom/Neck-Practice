@@ -5,11 +5,11 @@
 //  The Compose tour, and Compose Settings.
 //
 //  The tour dims the editor and lights up one part at a time (the settings card, the chord
-//  palette, the staff, the length picker, the Chords | Melody switch, Play Along) with a card
+//  palette, the staff, the length keys, the Chords | Melody switch, the bottom bar) with a card
 //  saying what it does, scrolling each into view. It opens the first time you open a
 //  composition each time the app is launched, until you turn it off: its last step asks.
 //  Compose Settings (in the editor's ⋯ menu) can turn it back on or show it right away, and
-//  holds Hear Compositions: the speaker button that plays a composition aloud.
+//  holds how Compose sounds: tap sounds, chords together or arpeggiated, and the count-in.
 //
 //  Parts of the editor mark themselves with `composeTourTarget(_:)`; the overlay reads their
 //  frames through ComposeTourAnchors.
@@ -55,28 +55,24 @@ enum ComposeTour {
         let text: String
     }
 
-    static func steps(hearPlayback: Bool) -> [Step] {
-        [
-            Step(target: nil, symbol: "music.note.house.fill", title: "Welcome to Compose",
-                 text: "Write your own chord progressions, and a melody if you like, then play them on your guitar while the app listens. Here's a quick tour."),
-            Step(target: .settings, symbol: "slider.horizontal.3", title: "Key, time and length",
-                 text: "Pick the key (major or minor), 4/4 or 3/4, and how many measures. Change the key any time: everything you've written moves with it."),
-            Step(target: .palette, symbol: "textformat", title: "Your chords",
-                 text: "These are the chords in your key, as Roman numerals. Tap one to write it on the staff; its 7th and other versions then show underneath. Swipe them for borrowed chords like ♭VII and V/V."),
-            Step(target: .staff, symbol: "hand.tap", title: "Put them on the staff",
-                 text: "Chords go at the blue mark, one after another, like typing. Tap a beat to move the mark; an empty beat also shows the chords to pick from. Long-press a chord to change its length or inversion, see where to play it, or copy its measure."),
-            Step(target: .length, symbol: "metronome", title: "How long each chord lasts",
-                 text: "Pick the length before you write a chord: a quarter, half, dotted half or whole note. Gaps become rests."),
-            Step(target: .mode, symbol: "music.quarternote.3", title: "Add a melody",
-                 text: "Switch to Melody to put single notes over your chords, from eighth notes to whole notes, sharps and flats included. Your chords stay on the staff, faded behind the melody; turn that off in Compose Settings."),
-            Step(target: .playAlong, symbol: "music.mic", title: "Play it",
-                 text: hearPlayback
-                    ? "Tap Play Along and play it on your guitar: the app listens and marks each chord green. The speaker button plays it for you first."
-                    : "Tap Play Along and play it on your guitar: the app listens and marks each chord green. To hear it played first, turn on Hear Compositions in Compose Settings."),
-            Step(target: nil, symbol: "checkmark.circle.fill", title: "You're ready",
-                 text: "How to Compose (the full guide), Compose Settings and Undo are in the ⋯ menu. Should this tour open again next time you open the app?"),
-        ]
-    }
+    static let steps: [Step] = [
+        Step(target: nil, symbol: "music.note.house.fill", title: "Welcome to Compose",
+             text: "Write your own chord progressions, and a melody if you like, hear them, then play them on your guitar while the app listens. Here's a quick tour."),
+        Step(target: .settings, symbol: "slider.horizontal.3", title: "Key, time and length",
+             text: "Pick the key (major or minor), 4/4 or 3/4, and how many measures. Change the key any time: everything you've written moves with it, melody included."),
+        Step(target: .palette, symbol: "textformat", title: "Your chords",
+             text: "These are the chords in your key, as Roman numerals. Tap one to hear it and write it on the staff; its 7th and other versions then show underneath. More Chords has borrowed chords like ♭VII and V/V."),
+        Step(target: .staff, symbol: "hand.tap", title: "On the staff",
+             text: "Chords go at the blue mark, one after another, like typing. Tap an empty beat to move the mark. Tap a chord to change its length, version or bass note, copy it, see where to play it, or delete it. Tap a measure's number to copy, repeat, move or delete whole measures."),
+        Step(target: .length, symbol: "metronome", title: "How long, rests and delete",
+             text: "Pick how many beats the next chord lasts. Rest leaves a gap and moves on; the delete key takes back what's before the mark. Undo is at the top of the screen."),
+        Step(target: .mode, symbol: "music.quarternote.3", title: "Add a melody",
+             text: "Switch to Melody to put single notes over your chords, from sixteenths and triplets to whole notes, sharps and flats included. The buttons on the right choose how you write: the keys, a fretboard to tap (for melody), or the microphone, which listens to your guitar and writes down what you play."),
+        Step(target: .playAlong, symbol: "play.fill", title: "Hear it, then play it",
+             text: "Play plays your piece, or just the measures you've selected; the loop button keeps it going, and the number is the tempo. Then tap Play Along and play it on your guitar: the app listens and marks each chord green."),
+        Step(target: nil, symbol: "checkmark.circle.fill", title: "You're ready",
+             text: "How to Compose (the full guide) and Compose Settings are in the ⋯ menu. Should this tour open again next time you open the app?"),
+    ]
 }
 
 // MARK: - Overlay
@@ -224,51 +220,50 @@ struct ComposeSettingsView: View {
 
     /// Faded chord notes behind the melody, on the staff.
     static let chordsUnderMelodyKey = "compose.chordsUnderMelody"
+    /// Tablature under the melody.
+    static let tabKey = "compose.showsTab"
 
     /// Close the settings and start the tour.
     let onShowTour: () -> Void
 
     @AppStorage(Self.chordsUnderMelodyKey) private var chordsUnderMelody = true
+    @AppStorage(Self.tabKey) private var showsTab = true
     @AppStorage(ComposeTour.enabledKey) private var tourEnabled = true
-    @AppStorage(CompositionPlayer.enabledKey) private var hearPlayback = false
+    @AppStorage(CompositionPlayer.tapSoundsKey) private var tapSounds = true
     @AppStorage(CompositionPlayer.styleKey) private var playbackStyle: CompositionPlaybackStyle = .together
-    @AppStorage(CompositionPlayer.tempoKey) private var playbackTempo = CompositionPlayer.defaultTempo
+    @AppStorage(CompositionPlayer.countInKey) private var countIn = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle(isOn: $hearPlayback) {
-                        Label("Hear Compositions", systemImage: "speaker.wave.2")
+                    Toggle(isOn: $tapSounds) {
+                        Label("Sound as You Write", systemImage: "speaker.wave.2")
                     }
-                    if hearPlayback {
-                        Picker("Chords", selection: $playbackStyle) {
-                            ForEach(CompositionPlaybackStyle.allCases) { style in
-                                Text(style.displayName).tag(style)
-                            }
+                    Picker("Chords", selection: $playbackStyle) {
+                        ForEach(CompositionPlaybackStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
                         }
-                        Stepper(value: $playbackTempo, in: CompositionPlayer.tempoRange, step: 5) {
-                            HStack {
-                                Text("Tempo")
-                                Spacer()
-                                Text("\(playbackTempo) BPM")
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                        .accessibilityValue("\(playbackTempo) beats per minute")
                     }
+                    Toggle(isOn: $countIn) {
+                        Label("Count In Before Playing", systemImage: "metronome")
+                    }
+                } header: {
+                    Text("Sound")
                 } footer: {
-                    Text("Adds a speaker button next to Play Along that plays your composition on the guitar, its chords all at once or as arpeggios, with the melody on top.")
+                    Text("Each chord and note sounds as you write or pick it: a chord's notes together, as an arpeggio, or strummed or fingerpicked on its guitar shape. Play, in the editor's bottom bar, plays the piece the same way; its tempo is set there and kept with each composition.")
                 }
 
                 Section {
                     Toggle(isOn: $chordsUnderMelody) {
                         Label("Chords Under the Melody", systemImage: "music.note.list")
                     }
+                    Toggle(isOn: $showsTab) {
+                        Label("TAB Under the Melody", systemImage: "list.number")
+                    }
                 } footer: {
-                    Text("With a melody, the staff shows the melody's notes with each chord named above. This also draws the chord's notes, faded, behind the melody.")
+                    Text("With a melody, the staff shows the melody's notes with each chord named above. Chords Under the Melody also draws the chord's notes, faded, behind it. TAB shows where each note is played: the fret you tapped if you wrote it on the fretboard, else the lowest one.")
                 }
 
                 Section {
