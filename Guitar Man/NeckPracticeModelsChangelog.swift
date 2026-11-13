@@ -36,6 +36,31 @@ enum Changelog {
     /// Newest first.
     static let entries: [ChangelogEntry] = [
         ChangelogEntry(
+            version: "1.7",
+            released: "November 2026",
+            releasedOn: DateComponents(year: 2026, month: 11, day: 13),
+            items: [
+                ChangelogItem(symbol: "hand.tap", title: "A new Compose editor",
+                              detail: "Tap a chord, a note or a measure number to change it, and its tools appear in place of the keys. Nothing hides behind a long press any more, anything that would write over your music asks first, and Undo and Redo sit at the top."),
+                ChangelogItem(symbol: "mic", title: "Write by playing",
+                              detail: "Tap the microphone in Compose and play your guitar. Step by Step writes each chord or note you play at the cursor; In Time counts you in and writes a whole take on the beats you played."),
+                ChangelogItem(symbol: "doc.on.doc", title: "Measure tools",
+                              detail: "Copy, paste, repeat, move, insert, clear and delete whole measures. Pieces can be up to 32 measures, each keeps its own tempo, and changing the key moves the melody with it."),
+                ChangelogItem(symbol: "music.note", title: "Ties, sixteenths and triplets",
+                              detail: "Tie a chord or note to the next, across the barline too, and write sixteenth notes and eighth-note triplets."),
+                ChangelogItem(symbol: "guitars", title: "Fretboard and TAB",
+                              detail: "Tap a melody in on the fretboard, and see TAB under the staff."),
+                ChangelogItem(symbol: "play.circle", title: "Better playback",
+                              detail: "Play the whole piece, the measures you selected, or from a chord or note, with a loop and a count-in. Chords can be strummed or fingerpicked, and Open in Solo Buddy turns your chords into a backing track."),
+                ChangelogItem(symbol: "square.and.arrow.up", title: "Share your music",
+                              detail: "Send a composition as a PDF lead sheet, or as a file another Guitar Man player can open and make their own. You can duplicate a piece too."),
+                ChangelogItem(symbol: "books.vertical", title: "25 examples",
+                              detail: "Compose now has Examples, from two chords to a jazz turnaround: the progressions behind songs you know, tunes like Greensleeves and Ode to Joy with their melodies, and advanced pieces to take apart."),
+                ChangelogItem(symbol: "music.mic", title: "Blues Buddy: change any bar",
+                              detail: "Tap a bar in the chart to put another chord in it. The bass, chords, fills and licks follow the chord you chose, and the changes are saved with the groove."),
+            ]
+        ),
+        ChangelogEntry(
             version: "1.6",
             released: "November 2026",
             releasedOn: DateComponents(year: 2026, month: 11, day: 10),
